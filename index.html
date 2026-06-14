@@ -14,7 +14,7 @@
 body{font-family:'Montserrat',sans-serif;background:var(--navy);color:var(--cream);min-height:100vh}
 
 /* LOGIN */
-#loginPage{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse 80% 80% at 50% 50%,#0d1a2e,var(--navy))}
+#loginPage{display:flex;align-items:center;justify-content:center;min-height:100%;background:radial-gradient(ellipse 80% 80% at 50% 50%,#0d1a2e,var(--navy))}
 .lbox{background:var(--navy2);border:1px solid rgba(201,162,39,.25);border-radius:12px;padding:48px 44px;width:100%;max-width:400px;box-shadow:0 32px 80px rgba(0,0,0,.6)}
 .l-tjc{font-family:'Playfair Display',serif;font-size:52px;font-weight:700;color:var(--gold);text-align:center;line-height:1}
 .l-sub{font-size:10px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:rgba(245,237,214,.4);text-align:center;margin-top:5px;margin-bottom:28px}
@@ -27,7 +27,7 @@ body{font-family:'Montserrat',sans-serif;background:var(--navy);color:var(--crea
 .lerr{background:rgba(204,41,54,.12);border:1px solid rgba(204,41,54,.35);color:#ff6b6b;padding:9px 14px;border-radius:4px;font-size:12px;margin-bottom:12px;display:none}
 
 /* LAYOUT */
-#app{display:none;min-height:100vh}
+#app{display:none;min-height:100vh;width:100%}
 .layout{display:flex;min-height:100vh}
 
 /* SIDEBAR */
@@ -230,8 +230,24 @@ tr:hover td{background:rgba(201,162,39,.03)}
 </head>
 <body>
 
+<!-- PUBLIC WEBSITE (main view) -->
+<div id="publicSite" style="position:fixed;inset:0;z-index:0">
+  <iframe id="publicFrame" style="width:100%;height:100%;border:none;background:#fff"></iframe>
+</div>
+
+<!-- ADMIN FLOATING BUTTON -->
+<button id="adminFloatBtn" onclick="openAdminOverlay()" style="display:none;position:fixed;bottom:28px;left:24px;z-index:9000;background:#0d1a2e;color:#c9a227;border:1.5px solid #c9a227;padding:9px 18px;border-radius:24px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.5)">🔐 ADMIN</button>
+
+<!-- ADMIN OVERLAY -->
+<div id="adminOverlay" style="display:none;position:fixed;inset:0;z-index:9001">
+  <button onclick="closeAdminOverlay()" style="position:fixed;top:14px;right:14px;z-index:9999;background:#0d1a2e;color:#c9a227;border:1.5px solid rgba(201,162,39,.4);padding:7px 16px;border-radius:20px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer">✕ Close</button>
+  <div id="adminPanel" style="position:absolute;inset:0;overflow:auto;background:#0a1628">
+    <!-- loginPage and app moved here by JS -->
+  </div>
+</div>
+
 <!-- LOGIN -->
-<div id="loginPage">
+<div id="loginPage" style="display:none">
   <div class="lbox">
     <div class="l-tjc">TJC</div>
     <div class="l-sub">The Jeans Club</div>
@@ -283,6 +299,7 @@ tr:hover td{background:rgba(201,162,39,.03)}
     <div class="tb-right">
       <span class="tb-badge">Admin</span>
       <span style="font-size:11px;color:rgba(245,237,214,.35)" id="tbdate"></span>
+      <button onclick="doLogout()" style="background:none;border:1px solid rgba(201,162,39,.3);color:rgba(245,237,214,.5);padding:5px 12px;font-size:10px;font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;border-radius:4px;cursor:pointer">Logout</button>
     </div>
   </div>
   <div class="content">
@@ -625,7 +642,57 @@ function doLogin(){
     setTimeout(function(){el.style.display='none'},3000);
   }
 }
-function doLogout(){document.getElementById('app').style.display='none';document.getElementById('loginPage').style.display='flex';document.getElementById('lp').value=''}
+function openAdminOverlay(){
+  var overlay=document.getElementById('adminOverlay');
+  var panel=document.getElementById('adminPanel');
+  var lp=document.getElementById('loginPage');
+  var ap=document.getElementById('app');
+
+  // Move login and app into panel (only once)
+  if(lp.parentNode!==panel){
+    panel.appendChild(lp);
+    panel.appendChild(ap);
+  }
+
+  overlay.style.display='block';
+  document.getElementById('adminFloatBtn').style.display='none';
+  document.body.style.overflow='hidden';
+
+  // Show login if not already logged in
+  if(ap.style.display!=='block'){
+    lp.style.display='flex';
+    ap.style.display='none';
+  }
+}
+
+function closeAdminOverlay(){
+  document.getElementById('adminOverlay').style.display='none';
+  document.body.style.overflow='';
+  // Refresh public site with latest data
+  var frame=document.getElementById('publicFrame');
+  if(frame)frame.srcdoc=buildWebsiteHTML();
+}
+
+function closeAdminOverlayOutside(e){
+  if(e.target===document.getElementById('adminOverlay'))closeAdminOverlay();
+}
+
+// Override doLogout to go back to login inside overlay
+window.doLogout=function(){
+  document.getElementById('app').style.display='none';
+  document.getElementById('loginPage').style.display='flex';
+  document.getElementById('lp').value='';
+  var cb=document.getElementById('adminCloseBtn');
+  if(cb)cb.style.display='none';
+};
+
+// Init: render public website on page load
+window.addEventListener('load',function(){
+  var frame=document.getElementById('publicFrame');
+  if(frame){
+    frame.srcdoc=buildWebsiteHTML();
+  }
+});
 document.getElementById('lp').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin()});
 document.getElementById('lu').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin()});
 
@@ -633,6 +700,11 @@ document.getElementById('lu').addEventListener('keydown',function(e){if(e.key===
 function initApp(){
   document.getElementById('tbdate').textContent=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
   renderProds();renderCats();renderEnqs();updateDash();loadContentFields();checkBackupReminder();
+}
+
+function refreshPublicSite(){
+  var frame=document.getElementById('publicFrame');
+  if(frame)frame.srcdoc=buildWebsiteHTML();
 }
 
 function loadContentFields(){
@@ -1585,6 +1657,7 @@ function buildWebsiteHTML(){
     +'\n<a class="nav-link" data-sec="catalogue" href="javascript:void(0)" onclick="smoothTo(\'catalogue\');return false;">Catalogue</a>'
     +'\n<a class="nav-link" data-sec="products" href="javascript:void(0)" onclick="smoothTo(\'products\');return false;">Products</a>'
     +'\n<a class="nav-link" data-sec="contact" href="javascript:void(0)" onclick="smoothTo(\'contact\');return false;">Contact</a>'
+    +'\n<a class="nav-link" href="javascript:void(0)" onclick="window.parent.openAdminOverlay&&window.parent.openAdminOverlay();return false;" style="color:#c9a227;font-weight:700">\ud83d\udd10 Admin</a>'
     +'\n<a class="nav-wa" href="https://wa.me/'+phone+'" target="_blank">WhatsApp Us</a>'
     +'\n</div>'
     +'\n<button class="ham" id="hambtn" onclick="toggleMob()" aria-label="Menu"><span></span><span></span><span></span></button>'
@@ -1594,6 +1667,7 @@ function buildWebsiteHTML(){
     +'\n<a class="mob-item" href="javascript:void(0)" onclick="smoothTo(\'catalogue\');closeMob();return false;">Catalogue</a>'
     +'\n<a class="mob-item" href="javascript:void(0)" onclick="smoothTo(\'products\');closeMob();return false;">Products</a>'
     +'\n<a class="mob-item" href="javascript:void(0)" onclick="smoothTo(\'contact\');closeMob();return false;">Contact</a>'
+    +'\n<a class="mob-item" href="javascript:void(0)" onclick="window.parent.openAdminOverlay&&window.parent.openAdminOverlay();closeMob();return false;" style="color:#c9a227;font-weight:700">\ud83d\udd10 Admin</a>'
     +'\n<a class="mob-wa" href="https://wa.me/'+phone+'" target="_blank">WhatsApp Us</a>'
     +'\n</div>'
 
