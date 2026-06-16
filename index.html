@@ -1377,9 +1377,9 @@ function openProdModal(id){
 
 function saveProd(){
   var name=document.getElementById('pn').value.trim();
-  var price=parseInt(document.getElementById('pp').value);
-  var moq=parseInt(document.getElementById('pm').value);
-  if(!name||!price||!moq){toast('Name, price & MOQ are required','err');return}
+  var price=parseInt(document.getElementById('pp').value)||0;
+  var moq=parseInt(document.getElementById('pm').value)||0;
+  if(!name){toast('Product name required','err');return}
   var prods=getProds();
   var eid=document.getElementById('pid').value;
   var urlVal=document.getElementById('pphoto').value.trim();
@@ -1490,11 +1490,11 @@ function handleBulkCsv(input){
     var prods=getProds();
     var added=0,skipped=0;
     rows.forEach(function(r){
-      if(!r.name||!r.price){skipped++;return}
+      if(!r.name){skipped++;return}
       var cat=r.category&&validCatIds.indexOf(r.category)>=0?r.category:(validCatIds[0]||'jeans');
       var price=parseInt(r.price);
       var moq=parseInt(r.moq)||1;
-      if(!price){skipped++;return}
+      // price optional - skip removed
       prods.push({
         id:Date.now()+added,
         name:r.name,
@@ -1514,7 +1514,7 @@ function handleBulkCsv(input){
     renderProds();updateDash();
     input.value='';
     if(added)logActivity('Bulk uploaded '+added+' products via CSV'+(skipped?' ('+skipped+' skipped)':''));
-    toast(added+' products added'+(skipped?', '+skipped+' skipped (missing name/price)':'')+'!',added?'ok':'err');
+    toast(added+' products added'+(skipped?', '+skipped+' skipped (missing name)':'')+'!',added?'ok':'err');
   };
   reader.readAsText(file);
 }
