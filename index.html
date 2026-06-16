@@ -645,13 +645,33 @@ function onFbReady(fn){if(FB_READY)fn();else FB_CALLBACKS.push(fn);}
 var S={
   g:function(k){try{return JSON.parse(localStorage.getItem('tjc2_'+k)||'null')}catch(e){return null}},
   s:function(k,v){
-    localStorage.setItem('tjc2_'+k,JSON.stringify(v));
-    var ts=Date.now();
-    localStorage.setItem('tjc2_'+k+'_ts',String(ts));
-    // Sync to Firebase for key data
-    var fbKeys=['prods','cats','content_hero','content_contact','content_stats','content_about'];
-    if(fbKeys.indexOf(k)>=0){
-      pushKeyToFirebase(k,v,ts);
+    try{
+      localStorage.setItem('tjc2_'+k,JSON.stringify(v));
+      var ts=Date.now();
+      localStorage.setItem('tjc2_'+k+'_ts',String(ts));
+      // Sync to Firebase for key data
+      var fbKeys=['prods','cats','content_hero','content_contact','content_stats','content_about'];
+      if(fbKeys.indexOf(k)>=0){
+        pushKeyToFirebase(k,v,ts);
+      }
+    }catch(e){
+      if(e.name==='QuotaExceededError'||e.code===22||e.code===1014){
+        // Storage full — strip photos from cats to free space, then retry
+        if(k==='cats'){
+          try{
+            var slim=v.map(function(c){return {id:c.id,name:c.name,tag:c.tag,price:c.price,moq:c.moq,styles:c.styles,photo:(c.photo&&!c.photo.startsWith('data:'))?c.photo:''};});
+            localStorage.setItem('tjc2_'+k,JSON.stringify(slim));
+            localStorage.setItem('tjc2_'+k+'_ts',String(Date.now()));
+            if(typeof toast==='function')toast('⚠️ Storage almost full — category photos removed to save space. Use image URLs instead of uploads.','err');
+          }catch(e2){
+            if(typeof toast==='function')toast('❌ Storage full! Please delete some products or categories to free space.','err');
+          }
+        } else {
+          if(typeof toast==='function')toast('❌ Storage full! Please delete some old data to free space.','err');
+        }
+      } else {
+        console.error('Storage error:',e);
+      }
     }
   }
 };
@@ -1078,13 +1098,15 @@ function handlePhotoFiles(input){
     if(file.size>5*1024*1024){toast(file.name+' too large! Max 5MB','err');remaining--;if(remaining===0)input.value='';return;}
     var reader=new FileReader();
     reader.onload=function(e){
-      currentPhotosData.push(e.target.result);
-      renderPhotoGallery();
-      remaining--;
-      if(remaining===0){
-        document.getElementById('uploadArea').querySelector('.photo-upload-text').innerHTML='<span style="color:#4ade80">✅ '+currentPhotosData.length+' photo(s) added!</span><br>Click to add more';
-        input.value='';
-      }
+      compressImage(e.target.result,800,800,0.75,function(compressed){
+        currentPhotosData.push(compressed);
+        renderPhotoGallery();
+        remaining--;
+        if(remaining===0){
+          document.getElementById('uploadArea').querySelector('.photo-upload-text').innerHTML='<span style="color:#4ade80">✅ '+currentPhotosData.length+' photo(s) added!</span><br>Click to add more';
+          input.value='';
+        }
+      });
     };
     reader.readAsDataURL(file);
   });
@@ -1099,18 +1121,35 @@ function addPhotoUrl(){
   renderPhotoGallery();
 }
 
+function compressImage(dataURL,maxW,maxH,quality,cb){
+  var img=new Image();
+  img.onload=function(){
+    var w=img.width,h=img.height;
+    var scale=Math.min(1,maxW/w,maxH/h);
+    var nw=Math.round(w*scale),nh=Math.round(h*scale);
+    var canvas=document.createElement('canvas');
+    canvas.width=nw;canvas.height=nh;
+    var ctx=canvas.getContext('2d');
+    ctx.drawImage(img,0,0,nw,nh);
+    cb(canvas.toDataURL('image/jpeg',quality));
+  };
+  img.src=dataURL;
+}
+
 function handleCatPhoto(input){
   var file=input.files[0];
   if(!file)return;
   if(file.size>5*1024*1024){toast('File too large! Max 5MB','err');return}
   var reader=new FileReader();
   reader.onload=function(e){
-    currentCatPhotoData=e.target.result;
-    var prev=document.getElementById('catPhotoPreview');
-    prev.src=e.target.result;
-    prev.style.display='block';
-    document.getElementById('cphoto').value='';
-    document.getElementById('catUploadArea').querySelector('.photo-upload-text').innerHTML='<span style="color:#4ade80">✅ Photo uploaded!</span><br>Click to change';
+    compressImage(e.target.result,600,600,0.7,function(compressed){
+      currentCatPhotoData=compressed;
+      var prev=document.getElementById('catPhotoPreview');
+      prev.src=compressed;
+      prev.style.display='block';
+      document.getElementById('cphoto').value='';
+      document.getElementById('catUploadArea').querySelector('.photo-upload-text').innerHTML='<span style="color:#4ade80">✅ Photo uploaded!</span><br>Click to change';
+    });
   };
   reader.readAsDataURL(file);
 }
