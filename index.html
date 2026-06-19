@@ -1414,7 +1414,7 @@ function openProdModal(id){
     document.getElementById('prodModalTitle').textContent='Add New Product';
     document.getElementById('pid').value='';
     ['pn','psk','pd'].forEach(function(x){document.getElementById(x).value=''});
-    if(catSelect.options.length>0)document.getElementById('pc').value=catSelect.options[0].value;
+    var catSelect=document.getElementById('pc');if(catSelect&&catSelect.options.length>0)catSelect.value=catSelect.options[0].value;
     document.getElementById('pp').value='';
     document.getElementById('pm').value='';
     document.getElementById('pb').value='';
@@ -1671,10 +1671,10 @@ function renderEnqs(){
       +'<td>'+esc(e.city)+'</td>'
       +'<td>'+srcBadge+'</td>'
       +'<td style="font-size:11px;color:rgba(245,237,214,.38)">'+esc(e.date||'\u2014')+'</td>'
-      +'<td><select class="status-select '+statusBadgeClass(st)+'" onchange="setEnqStatus(\'\'+e.id+\'\',this.value)">'
+      +'<td><select class="status-select '+statusBadgeClass(st)+'" onchange="setEnqStatus(\'+String(e.id)+\',this.value)">'
       +['new','contacted','converted','lost'].map(function(s){return '<option value="'+s+'"'+(st===s?' selected':'')+'>'+statusLabel(s)+'</option>';}).join('')
       +'</select></td>'
-      +'<td><div class="abtn-wrap"><button class="btn-sm-view" onclick="viewEnq(\'\'+e.id+\'\')">View</button><button class="btn-sm-del" onclick="delEnq(\'\'+e.id+\'\')">\ud83d\uddd1</button></div></td>'
+      +'<td><div class="abtn-wrap"><button class="btn-sm-view" onclick="viewEnq(\'+String(e.id)+\')">View</button><button class="btn-sm-del" onclick="delEnq(\'+String(e.id)+\')">\ud83d\uddd1</button></div></td>'
       +'</tr>';
   }).join('');
 }
