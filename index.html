@@ -238,6 +238,7 @@ tr:hover td{background:rgba(201,162,39,.03)}
   .tb-badge{font-size:9px;padding:3px 8px}
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -341,11 +342,15 @@ tr:hover td{background:rgba(201,162,39,.03)}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px">
         <div>
           <div class="sh"><div class="sh-title">📊 Enquiry Status</div></div>
-          <div style="background:var(--navy2);border:1px solid rgba(201,162,39,.08);border-radius:10px;padding:20px" id="statusAnalytics"></div>
+          <div style="background:var(--navy2);border:1px solid rgba(201,162,39,.08);border-radius:10px;padding:20px;display:flex;align-items:center;justify-content:center;min-height:220px" id="statusAnalytics">
+            <canvas id="statusChart" style="max-height:200px"></canvas>
+          </div>
         </div>
         <div>
           <div class="sh"><div class="sh-title">🔥 Interest by Category</div></div>
-          <div style="background:var(--navy2);border:1px solid rgba(201,162,39,.08);border-radius:10px;padding:20px" id="catAnalytics"></div>
+          <div style="background:var(--navy2);border:1px solid rgba(201,162,39,.08);border-radius:10px;padding:20px;min-height:220px" id="catAnalytics">
+            <canvas id="catChart" style="max-height:200px"></canvas>
+          </div>
         </div>
       </div>
       <div class="sh" style="margin-top:18px"><div class="sh-title">🕘 Recent Activity</div></div>
@@ -439,6 +444,26 @@ tr:hover td{background:rgba(201,162,39,.03)}
           <div class="fg"><label>About Text</label><textarea id="fabout">India's leading wholesale men's fashion brand since 2010. Trusted by 15,000+ retailers.</textarea></div>
           <div class="fg"><label>Copyright Year</label><input id="fyear" value="2024"></div>
           <button class="savebtn" onclick="saveC('about')">💾 Save</button>
+        </div>
+        <div class="ecard">
+          <div class="ecard-title">📍 Shop Location</div>
+          <div class="fg"><label>Shop Address</label><textarea id="locaddr" placeholder="e.g. Shop No. 12, Textile Market, Surat, Gujarat - 395003"></textarea></div>
+          <div class="fg"><label>Google Maps Link (optional)</label><input id="locurl" placeholder="Paste Google Maps share link (maps.app.goo.gl/...)"></div>
+          <p style="font-size:11px;color:rgba(245,237,214,.35);margin:-6px 0 12px;line-height:1.5">Open Google Maps → search your shop → tap Share → copy link, paste here. If left blank, the address text above will be used to open Maps.</p>
+          <button class="savebtn" onclick="saveC('location')">💾 Save</button>
+        </div>
+        <div class="ecard" style="grid-column:1/-1">
+          <div class="ecard-title">🤖 Chatbot FAQs</div>
+          <p style="font-size:11px;color:rgba(245,237,214,.4);margin-bottom:10px;line-height:1.6">Ek line me ek sawaal-jawab daalein, is format me: <b>Sawaal :: Jawab</b><br>Customer jab website pe chatbot me sawaal type/select karega, matching jawab dikhega.</p>
+          <div class="fg"><textarea id="cfaqs" style="min-height:220px;font-family:monospace;font-size:12px" placeholder="MOQ kya hai? :: Hamara minimum order quantity 50 pieces per style hai.
+Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me dispatch ho jata hai."></textarea></div>
+          <button class="savebtn" onclick="saveC('faqs')">💾 Save FAQs</button>
+        </div>
+        <div class="ecard" style="grid-column:1/-1">
+          <div class="ecard-title">🧠 AI Chatbot (Optional, Claude-powered)</div>
+          <p style="font-size:11px;color:rgba(245,237,214,.4);margin-bottom:10px;line-height:1.6">Smarter chatbot jo aapke live catalog ke hisab se answer deta hai. Backend deploy karne ke baad jo URL milta hai (Cloudflare Worker), wo yahan paste karein. <b>Khali chhoda toh website automatically upar wala free FAQ bot use karegi</b> — kuch bhi tootega nahi.</p>
+          <div class="fg"><label>AI Backend URL</label><input id="aiWorkerUrl" placeholder="https://your-worker-name.workers.dev"></div>
+          <button class="savebtn" onclick="saveC('aichat')">💾 Save</button>
         </div>
       </div>
     </div>
@@ -633,38 +658,131 @@ function onFbReady(fn){if(FB_READY)fn();else FB_CALLBACKS.push(fn);}
   document.head.appendChild(s1);
 })();
 
-// ══ STORE — localStorage + Firebase sync ══
-var S={
-  g:function(k){try{return JSON.parse(localStorage.getItem('tjc2_'+k)||'null')}catch(e){return null}},
-  s:function(k,v){
-    try{
-      localStorage.setItem('tjc2_'+k,JSON.stringify(v));
-      var ts=Date.now();
-      localStorage.setItem('tjc2_'+k+'_ts',String(ts));
-      // Sync to Firebase for key data
-      var fbKeys=['prods','cats','content_hero','content_contact','content_stats','content_about'];
-      if(fbKeys.indexOf(k)>=0){
-        pushKeyToFirebase(k,v,ts);
-      }
-    }catch(e){
-      if(e.name==='QuotaExceededError'||e.code===22||e.code===1014){
-        // Storage full — strip photos from cats to free space, then retry
-        if(k==='cats'){
-          try{
-            var slim=v.map(function(c){return {id:c.id,name:c.name,tag:c.tag,price:c.price,moq:c.moq,styles:c.styles,photo:(c.photo&&!c.photo.startsWith('data:'))?c.photo:''};});
-            localStorage.setItem('tjc2_'+k,JSON.stringify(slim));
-            localStorage.setItem('tjc2_'+k+'_ts',String(Date.now()));
-            if(typeof toast==='function')toast('⚠️ Storage almost full — category photos removed to save space. Use image URLs instead of uploads.','err');
-          }catch(e2){
-            if(typeof toast==='function')toast('❌ Storage full! Please delete some products or categories to free space.','err');
-          }
-        } else {
-          if(typeof toast==='function')toast('❌ Storage full! Please delete some old data to free space.','err');
-        }
-      } else {
-        console.error('Storage error:',e);
-      }
+// ══ INDEXED DB STORE — no 5MB limit, stores GBs of photos ══
+var IDB=null;
+var IDB_READY=false;
+var IDB_CALLBACKS=[];
+var IDB_CACHE={}; // in-memory cache so S.g() stays synchronous
+
+function onIdbReady(fn){if(IDB_READY)fn();else IDB_CALLBACKS.push(fn);}
+
+(function(){
+  if(!window.indexedDB){IDB_READY=true;console.warn('IndexedDB not supported, falling back to localStorage');return;}
+  var req=indexedDB.open('tjc2_db',1);
+  req.onupgradeneeded=function(e){
+    var db=e.target.result;
+    if(!db.objectStoreNames.contains('kv')){db.createObjectStore('kv',{keyPath:'k'});}
+  };
+  req.onsuccess=function(e){
+    IDB=e.target.result;
+    // Load ALL keys into memory cache on startup so S.g() is synchronous
+    var tx=IDB.transaction('kv','readonly');
+    var store=tx.objectStore('kv');
+    var getAllReq=store.getAll();
+    getAllReq.onsuccess=function(){
+      var rows=getAllReq.result||[];
+      rows.forEach(function(row){IDB_CACHE[row.k]=row.v;});
+      // Migrate any existing localStorage data into IDB (one-time)
+      _migrateFromLocalStorage(function(){
+        IDB_READY=true;
+        IDB_CALLBACKS.forEach(function(fn){fn();});
+        IDB_CALLBACKS=[];
+        console.log('IndexedDB ready ✅ (no 5MB limit)');
+      });
+    };
+    getAllReq.onerror=function(){
+      IDB_READY=true;
+      IDB_CALLBACKS.forEach(function(fn){fn();});
+      IDB_CALLBACKS=[];
+    };
+  };
+  req.onerror=function(){
+    console.warn('IndexedDB open failed, using localStorage');
+    IDB_READY=true;
+    IDB_CALLBACKS.forEach(function(fn){fn();});
+    IDB_CALLBACKS=[];
+  };
+})();
+
+// One-time migration: copy localStorage tjc2_* keys into IDB
+function _migrateFromLocalStorage(cb){
+  var keys=['prods','cats','enqs','activity','pass','currentUser','lastBackup','pendingPush',
+    'content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
+  var migrated=0;
+  var tsKeys=keys.map(function(k){return k+'_ts';});
+  var allKeys=keys.concat(tsKeys);
+  var toMigrate=[];
+  allKeys.forEach(function(k){
+    if(localStorage.getItem('tjc2_'+k)!==null && IDB_CACHE[k]===undefined){
+      toMigrate.push(k);
     }
+  });
+  if(!toMigrate.length){cb();return;}
+  toMigrate.forEach(function(k){
+    var raw=localStorage.getItem('tjc2_'+k);
+    var v;
+    try{v=JSON.parse(raw);}catch(e){v=raw;}
+    _idbSet(k,v,function(){
+      migrated++;
+      if(migrated===toMigrate.length){
+        console.log('Migrated '+migrated+' keys from localStorage to IndexedDB');
+        cb();
+      }
+    });
+  });
+}
+
+// Low-level IDB set (writes to IDB + updates cache)
+function _idbSet(k,v,cb){
+  IDB_CACHE[k]=v;
+  if(!IDB){
+    // Fallback to localStorage
+    try{localStorage.setItem('tjc2_'+k,JSON.stringify(v));}catch(e){}
+    if(cb)cb();
+    return;
+  }
+  try{
+    var tx=IDB.transaction('kv','readwrite');
+    var store=tx.objectStore('kv');
+    store.put({k:k,v:v});
+    tx.oncomplete=function(){if(cb)cb();};
+    tx.onerror=function(){
+      // IDB write failed — fallback to localStorage
+      try{localStorage.setItem('tjc2_'+k,JSON.stringify(v));}catch(e2){}
+      if(cb)cb();
+    };
+  }catch(e){
+    try{localStorage.setItem('tjc2_'+k,JSON.stringify(v));}catch(e2){}
+    if(cb)cb();
+  }
+}
+
+// ══ STORE S — same API as before, now backed by IndexedDB ══
+var S={
+  // Synchronous read from in-memory cache (populated at startup)
+  g:function(k){
+    if(IDB_CACHE[k]!==undefined)return IDB_CACHE[k];
+    // Fallback: try localStorage
+    try{return JSON.parse(localStorage.getItem('tjc2_'+k)||'null');}catch(e){return null;}
+  },
+  // Write: updates cache immediately (so UI is instant), persists to IDB async
+  s:function(k,v,cb){
+    IDB_CACHE[k]=v;
+    var ts=Date.now();
+    IDB_CACHE[k+'_ts']=ts;
+    _idbSet(k,v);
+    _idbSet(k+'_ts',ts);
+    // Also keep small non-photo keys in localStorage for cross-tab compat
+    var smallKeys=['pass','currentUser','lastBackup','pendingPush'];
+    if(smallKeys.indexOf(k)>=0){
+      try{localStorage.setItem('tjc2_'+k,JSON.stringify(v));}catch(e){}
+    }
+    // Sync to Firebase
+    var fbKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
+    if(fbKeys.indexOf(k)>=0){
+      pushKeyToFirebase(k,v,ts);
+    }
+    if(cb)cb();
   }
 };
 
@@ -687,29 +805,26 @@ function pushKeyToFirebase(k,v,ts){
 // ══ PENDING PUSH QUEUE — retries every 5s until Firebase confirms ══
 var PENDING_PUSH_TIMER=null;
 function queuePendingPush(k){
-  var pend=[];
-  try{pend=JSON.parse(localStorage.getItem('tjc2_pendingPush')||'[]');}catch(e){}
+  var pend=S.g('pendingPush')||[];
   if(pend.indexOf(k)<0)pend.push(k);
-  localStorage.setItem('tjc2_pendingPush',JSON.stringify(pend));
+  S.s('pendingPush',pend);
   startPendingPushRetry();
 }
 function clearPendingPush(k){
-  var pend=[];
-  try{pend=JSON.parse(localStorage.getItem('tjc2_pendingPush')||'[]');}catch(e){}
+  var pend=S.g('pendingPush')||[];
   pend=pend.filter(function(x){return x!==k;});
-  localStorage.setItem('tjc2_pendingPush',JSON.stringify(pend));
+  S.s('pendingPush',pend);
   if(pend.length===0&&PENDING_PUSH_TIMER){clearInterval(PENDING_PUSH_TIMER);PENDING_PUSH_TIMER=null;}
 }
 function startPendingPushRetry(){
   if(PENDING_PUSH_TIMER)return;
   PENDING_PUSH_TIMER=setInterval(function(){
     if(!DB)return;
-    var pend=[];
-    try{pend=JSON.parse(localStorage.getItem('tjc2_pendingPush')||'[]');}catch(e){}
+    var pend=S.g('pendingPush')||[];
     if(pend.length===0){clearInterval(PENDING_PUSH_TIMER);PENDING_PUSH_TIMER=null;return;}
     pend.forEach(function(k){
       var val=S.g(k);
-      var ts=parseInt(localStorage.getItem('tjc2_'+k+'_ts')||'0',10);
+      var ts=S.g(k+'_ts')||0;
       if(val!==null)pushKeyToFirebase(k,val,ts);
     });
   },5000);
@@ -717,88 +832,102 @@ function startPendingPushRetry(){
 // Resume retrying any pending pushes from a previous session, once Firebase connects
 onFbReady(function(){startPendingPushRetry();});
 
-// ══ FIREBASE LISTENERS — admin-side real-time sync (enquiries + admin UI refresh) ══
+// ══ FIREBASE LISTENERS — admin-side real-time sync (enquiries + activity + admin UI refresh) ══
 var _fbAdminListenersStarted=false;
 function startFirebaseListeners(){
   if(!DB||_fbAdminListenersStarted)return;
   _fbAdminListenersStarted=true;
-  // Listen to enquiries separately (append-only, don't overwrite admin's local view)
+
+  // Real-time enquiries sync
   DB.ref('tjc/enqs').on('value',function(snap){
     var val=snap.val();
-    if(val!==null&&val!==undefined){
-      localStorage.setItem('tjc2_enqs',JSON.stringify(val));
-      // If admin portal is open, refresh enquiry list
-      if(document.getElementById('app')&&document.getElementById('app').style.display==='block'){
-        renderEnqs();updateDash();
+    if(val===null||val===undefined)return;
+    DB.ref('tjc/enqs_ts').once('value',function(tsSnap){
+      var cloudTs=Number(tsSnap.val()||0);
+      var localTs=Number(S.g('enqs_ts')||0);
+      // Accept cloud data if it's newer OR equal (another device wrote it)
+      if(cloudTs>=localTs){
+        IDB_CACHE['enqs']=val;
+        IDB_CACHE['enqs_ts']=cloudTs;
+        _idbSet('enqs',val);
+        if(cloudTs)_idbSet('enqs_ts',cloudTs);
+        if(document.getElementById('app')&&document.getElementById('app').style.display==='block'){
+          renderEnqs();updateDash();
+        }
       }
-    }
+    });
+  });
+
+  // Real-time activity log sync
+  DB.ref('tjc/activity').on('value',function(snap){
+    var val=snap.val();
+    if(val===null||val===undefined)return;
+    DB.ref('tjc/activity_ts').once('value',function(tsSnap){
+      var cloudTs=Number(tsSnap.val()||0);
+      var localTs=Number(S.g('activity_ts')||0);
+      if(cloudTs>=localTs){
+        IDB_CACHE['activity']=val;
+        IDB_CACHE['activity_ts']=cloudTs;
+        _idbSet('activity',val);
+        if(cloudTs)_idbSet('activity_ts',cloudTs);
+        if(document.getElementById('app')&&document.getElementById('app').style.display==='block'){
+          updateDash();
+        }
+      }
+    });
   });
 }
 
-// ══ FIREBASE PUSH — load cloud data into localStorage on first login ══
+// ══ FIREBASE SYNC — pull cloud data into IDB on login ══
 function syncFromFirebase(callback){
   if(!DB){callback&&callback();return;}
-  var tsKeys=['prods','cats','content_hero','content_contact','content_stats','content_about'];
-  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','activity'];
+  var tsKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
+  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','activity'];
   var done=0;
-  var pendingPush=[]; // keys where local is newer than cloud — push local back up
+  var pendingPush=[];
   keys.forEach(function(k){
     if(tsKeys.indexOf(k)>=0){
-      // Timestamp-aware sync: only overwrite local if cloud is newer (or local has no ts yet)
       DB.ref('tjc/'+k+'_ts').once('value',function(tsSnap){
         var cloudTs=tsSnap.val();
-        var localTs=parseInt(localStorage.getItem('tjc2_'+k+'_ts')||'0',10);
+        var localTs=Number(S.g(k+'_ts')||0);
         if(cloudTs!==null&&cloudTs!==undefined&&Number(cloudTs)>localTs){
-          // Cloud is newer — pull it down
           DB.ref('tjc/'+k).once('value',function(snap){
             var val=snap.val();
-            if(val!==null&&val!==undefined){
-              localStorage.setItem('tjc2_'+k,JSON.stringify(val));
-              localStorage.setItem('tjc2_'+k+'_ts',String(cloudTs));
-            }
+            if(val!==null&&val!==undefined){S.s(k,val);}
+            // Store cloud ts in cache directly (don't trigger another Firebase push)
+            IDB_CACHE[k+'_ts']=Number(cloudTs);
+            _idbSet(k+'_ts',Number(cloudTs));
             done++;
             if(done===keys.length){finishSync(callback,pendingPush);}
           },function(){done++;if(done===keys.length){finishSync(callback,pendingPush);}});
         } else {
-          // Local is same/newer (or cloud has no ts) — keep local, queue push to cloud
           if(localTs>0)pendingPush.push(k);
           done++;
           if(done===keys.length){finishSync(callback,pendingPush);}
         }
       },function(){
-        // ts read failed — fall back to old behavior for this key
         DB.ref('tjc/'+k).once('value',function(snap){
           var val=snap.val();
-          if(val!==null&&val!==undefined){
-            localStorage.setItem('tjc2_'+k,JSON.stringify(val));
-          }
+          if(val!==null&&val!==undefined){S.s(k,val);}
           done++;
           if(done===keys.length){finishSync(callback,pendingPush);}
         },function(){done++;if(done===keys.length){finishSync(callback,pendingPush);}});
       });
     } else {
-      // enqs/activity — keep old behavior (cloud is source of truth, append-only data)
       DB.ref('tjc/'+k).once('value',function(snap){
         var val=snap.val();
-        if(val!==null&&val!==undefined){
-          localStorage.setItem('tjc2_'+k,JSON.stringify(val));
-        }
+        if(val!==null&&val!==undefined){S.s(k,val);}
         done++;
         if(done===keys.length){finishSync(callback,pendingPush);}
-      },function(){
-        done++;
-        if(done===keys.length){finishSync(callback,pendingPush);}
-      });
+      },function(){done++;if(done===keys.length){finishSync(callback,pendingPush);}});
     }
   });
 }
 
 function finishSync(callback,pendingPush){
-  // Push back any keys where local data was newer than cloud
   pendingPush.forEach(function(k){
-    var val=null;
-    try{val=JSON.parse(localStorage.getItem('tjc2_'+k)||'null');}catch(e){}
-    var ts=parseInt(localStorage.getItem('tjc2_'+k+'_ts')||'0',10);
+    var val=S.g(k);
+    var ts=S.g(k+'_ts')||0;
     if(val!==null)pushKeyToFirebase(k,val,ts);
   });
   if(pendingPush.length>0&&typeof toast==='function'){
@@ -808,19 +937,20 @@ function finishSync(callback,pendingPush){
   startFirebaseListeners();
 }
 
-// ══ PUSH all localStorage data to Firebase (first time setup) ══
+// ══ PUSH all IDB data to Firebase (first time setup / manual sync) ══
 function pushAllToFirebase(){
   if(!DB)return;
-  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','activity'];
-  var tsKeys=['prods','cats','content_hero','content_contact','content_stats','content_about'];
+  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','activity'];
+  var tsKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
   var now=Date.now();
   keys.forEach(function(k){
     var val=S.g(k);
     if(val!==null&&val!==undefined){
       DB.ref('tjc/'+k).set(val);
       if(tsKeys.indexOf(k)>=0){
-        var ts=parseInt(localStorage.getItem('tjc2_'+k+'_ts')||'0',10)||now;
-        localStorage.setItem('tjc2_'+k+'_ts',String(ts));
+        var ts=Number(S.g(k+'_ts')||0)||now;
+        _idbSet(k+'_ts',ts);
+        IDB_CACHE[k+'_ts']=ts;
         DB.ref('tjc/'+k+'_ts').set(ts);
       }
     }
@@ -852,6 +982,15 @@ var DEF_CATS=[
   {id:'shorts',name:'Shorts & Tracks',tag:'● Casual Collection',price:'From ₹220',moq:'Min 60 pcs',styles:'40+ Styles',photo:'https://images.unsplash.com/photo-1591195853828-11db59a44f43?w=500&q=80'}
 ];
 
+var DEF_FAQS=[
+  {q:'MOQ kya hai?',a:'Hamara minimum order quantity (MOQ) generally 50 pieces per style hai. Exact MOQ category ke hisab se vary kar sakta hai.'},
+  {q:'Delivery me kitna time lagta hai?',a:'Order confirm hone ke baad 48 hours me dispatch ho jata hai. Delivery location ke hisab se 2-5 din lagte hain.'},
+  {q:'Payment kaise kar sakte hain?',a:'Hum bank transfer, UPI aur cash accept karte hain. Bulk orders ke liye advance payment required hota hai.'},
+  {q:'GST invoice milega?',a:'Haan, har order ke saath proper GST invoice diya jata hai.'},
+  {q:'Sample available hai?',a:'Haan, sample pieces available hain, please WhatsApp par enquiry karein.'},
+  {q:'Konse sizes available hain?',a:'Hamare paas S se XXL tak sizes available hain, category ke hisab se vary kar sakta hai.'}
+];
+
 function getProds(){return S.g('prods')||DEF_PRODS}
 function setProds(p){S.s('prods',p)}
 function getCats(){return S.g('cats')||DEF_CATS}
@@ -876,24 +1015,25 @@ function doLogin(){
     S.s('currentUser',u);
     document.getElementById('loginPage').style.display='none';
     document.getElementById('app').style.display='block';
-    // Show loading state
     var tb=document.getElementById('tbtitle');
     if(tb)tb.textContent='Syncing...';
-    // Sync from Firebase first, then init
-    onFbReady(function(){
-      syncFromFirebase(function(){
-        initApp();
-        logActivity('Logged in');
-        if(tb)tb.textContent='Dashboard';
+    // Wait for IDB then Firebase
+    onIdbReady(function(){
+      onFbReady(function(){
+        syncFromFirebase(function(){
+          initApp();
+          logActivity('Logged in');
+          if(tb)tb.textContent='Dashboard';
+        });
       });
+      // Fallback if Firebase not ready in 3s
+      setTimeout(function(){
+        if(document.getElementById('app').style.display==='block'&&
+           document.getElementById('s-prod').textContent==='0'){
+          initApp();
+        }
+      },3000);
     });
-    // Fallback if Firebase not ready in 3s
-    setTimeout(function(){
-      if(document.getElementById('app').style.display==='block'&&
-         document.getElementById('s-prod').textContent==='0'){
-        initApp();
-      }
-    },3000);
   } else {
     var el=document.getElementById('lerr');
     el.style.display='block';
@@ -942,22 +1082,23 @@ window.doLogout=function(){
   document.getElementById('lp').value='';
 };
 
-// ══ SILENT PUBLIC SYNC — pull latest from Firebase on every page load (no login needed) ══
+// ══ SILENT PUBLIC SYNC — pull latest from Firebase on every page load ══
 function silentPublicSync(){
   if(!DB){return;}
-  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about'];
+  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
   var fetched=0;var changed=false;
   keys.forEach(function(k){
     DB.ref('tjc/'+k+'_ts').once('value',function(tsSnap){
       var cloudTs=tsSnap.val();
-      var localTs=parseInt(localStorage.getItem('tjc2_'+k+'_ts')||'0',10);
+      var localTs=Number(S.g(k+'_ts')||0);
       if(cloudTs!==null&&cloudTs!==undefined&&Number(cloudTs)>localTs){
-        // Cloud is newer — pull it silently
         DB.ref('tjc/'+k).once('value',function(snap){
           var val=snap.val();
           if(val!==null&&val!==undefined){
-            localStorage.setItem('tjc2_'+k,JSON.stringify(val));
-            localStorage.setItem('tjc2_'+k+'_ts',String(cloudTs));
+            IDB_CACHE[k]=val;
+            IDB_CACHE[k+'_ts']=Number(cloudTs);
+            _idbSet(k,val);
+            _idbSet(k+'_ts',Number(cloudTs));
             changed=true;
           }
           fetched++;
@@ -978,18 +1119,19 @@ var _publicListenerStarted=false;
 function startPublicRealtimeListener(){
   if(!DB||_publicListenerStarted){return;}
   _publicListenerStarted=true;
-  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about'];
+  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
   keys.forEach(function(k){
     DB.ref('tjc/'+k).on('value',function(snap){
       var val=snap.val();
       if(val===null||val===undefined){return;}
       DB.ref('tjc/'+k+'_ts').once('value',function(tsSnap){
         var cloudTs=tsSnap.val();
-        var localTs=parseInt(localStorage.getItem('tjc2_'+k+'_ts')||'0',10);
+        var localTs=Number(S.g(k+'_ts')||0);
         if(cloudTs===null||cloudTs===undefined||Number(cloudTs)>=localTs){
-          localStorage.setItem('tjc2_'+k,JSON.stringify(val));
-          if(cloudTs!==null&&cloudTs!==undefined)localStorage.setItem('tjc2_'+k+'_ts',String(cloudTs));
-          // Refresh public page only (not admin panel)
+          IDB_CACHE[k]=val;
+          if(cloudTs!==null&&cloudTs!==undefined){IDB_CACHE[k+'_ts']=Number(cloudTs);}
+          _idbSet(k,val);
+          if(cloudTs!==null)_idbSet(k+'_ts',Number(cloudTs));
           var adminApp=document.getElementById('app');
           var adminOpen=adminApp&&adminApp.style.display==='block';
           if(!adminOpen){
@@ -1002,17 +1144,15 @@ function startPublicRealtimeListener(){
   });
 }
 
-// Init: render public website on page load, then silently sync from Firebase
+// Init: wait for IDB cache to load, then render public website, then sync from Firebase
 window.addEventListener('load',function(){
-  var frame=document.getElementById('publicFrame');
-  if(frame){
-    // 1. Render immediately from localStorage (fast)
-    frame.srcdoc=buildWebsiteHTML();
-  }
-  // 2. Once Firebase is ready, pull fresh data silently + start real-time listener
-  onFbReady(function(){
-    silentPublicSync();
-    startPublicRealtimeListener();
+  onIdbReady(function(){
+    var frame=document.getElementById('publicFrame');
+    if(frame){frame.srcdoc=buildWebsiteHTML();}
+    onFbReady(function(){
+      silentPublicSync();
+      startPublicRealtimeListener();
+    });
   });
 });
 document.getElementById('lp').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin()});
@@ -1074,6 +1214,17 @@ function loadContentFields(){
   // About
   var fab=document.getElementById('fabout');if(fab)fab.value=about.about||'';
   var fyr=document.getElementById('fyear');if(fyr)fyr.value=about.year||'';
+  // Shop Location
+  var loc=S.g('content_location')||{addr:'',url:''};
+  var laddr=document.getElementById('locaddr');if(laddr)laddr.value=loc.addr||'';
+  var lurl=document.getElementById('locurl');if(lurl)lurl.value=loc.url||'';
+  // Chatbot FAQs
+  var faqs=S.g('content_faqs')||DEF_FAQS;
+  var cfaqs=document.getElementById('cfaqs');
+  if(cfaqs)cfaqs.value=faqs.map(function(f){return f.q+' :: '+f.a;}).join('\n');
+  // AI Chatbot
+  var aiChat=S.g('content_aichat')||{url:''};
+  var aiUrlEl=document.getElementById('aiWorkerUrl');if(aiUrlEl)aiUrlEl.value=aiChat.url||'';
 }
 
 // ══ NAV ══
@@ -1170,13 +1321,20 @@ function compressImage(dataURL,maxW,maxH,quality,cb){
   var img=new Image();
   img.onload=function(){
     var w=img.width,h=img.height;
-    var scale=Math.min(1,maxW/w,maxH/h);
+    var hardMaxW=Math.min(maxW,500),hardMaxH=Math.min(maxH,500);
+    var scale=Math.min(1,hardMaxW/w,hardMaxH/h);
     var nw=Math.round(w*scale),nh=Math.round(h*scale);
     var canvas=document.createElement('canvas');
     canvas.width=nw;canvas.height=nh;
-    var ctx=canvas.getContext('2d');
-    ctx.drawImage(img,0,0,nw,nh);
-    cb(canvas.toDataURL('image/jpeg',quality));
+    canvas.getContext('2d').drawImage(img,0,0,nw,nh);
+    var result=canvas.toDataURL('image/jpeg',0.55);
+    if(result.length>180000){
+      var c2=document.createElement('canvas');
+      c2.width=Math.round(nw*0.65);c2.height=Math.round(nh*0.65);
+      c2.getContext('2d').drawImage(img,0,0,c2.width,c2.height);
+      result=c2.toDataURL('image/jpeg',0.45);
+    }
+    cb(result);
   };
   img.src=dataURL;
 }
@@ -1272,50 +1430,146 @@ function updateDash(){
   renderAnalytics();
 }
 
-// ══ ANALYTICS ══
+// ══ ANALYTICS — Chart.js ══
+var _statusChart=null;
+var _catChart=null;
+
 function renderAnalytics(){
-  var enqs=getEnqs(),cats=getCats();
-  // Status breakdown
+  var enqs=getEnqs();
+
+  // ── Doughnut: Enquiry Status ──
   var statuses=['new','contacted','converted','lost'];
-  var counts={new:0,contacted:0,converted:0,lost:0};
-  enqs.forEach(function(e){counts[getEnqStatus(e)]=(counts[getEnqStatus(e)]||0)+1;});
-  var total=enqs.length||1;
-  var sEl=document.getElementById('statusAnalytics');
-  if(sEl){
-    if(!enqs.length){sEl.innerHTML='<div style="text-align:center;color:rgba(245,237,214,.25);font-size:12px;padding:20px 0">No enquiries yet</div>';}
-    else{
-      sEl.innerHTML=statuses.map(function(s){
-        var c=counts[s]||0;var pct=Math.round((c/total)*100);
-        var color={new:'#60a5fa',contacted:'#fbbf24',converted:'#4ade80',lost:'#ff6b6b'}[s];
-        return '<div style="margin-bottom:12px">'
-          +'<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span>'+statusLabel(s)+'</span><span style="font-weight:700">'+c+' ('+pct+'%)</span></div>'
-          +'<div style="height:6px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:4px"></div></div>'
-          +'</div>';
-      }).join('');
+  var labels=['New','Contacted','Converted','Lost'];
+  var colors=['#60a5fa','#fbbf24','#4ade80','#ff6b6b'];
+  var counts=[0,0,0,0];
+  enqs.forEach(function(e){
+    var s=getEnqStatus(e);
+    var i=statuses.indexOf(s);
+    if(i>=0)counts[i]++;
+  });
+  var sCanvas=document.getElementById('statusChart');
+  var sContainer=document.getElementById('statusAnalytics');
+  if(sCanvas){
+    if(!enqs.length){
+      if(_statusChart){_statusChart.destroy();_statusChart=null;}
+      sContainer.innerHTML='<canvas id="statusChart" style="max-height:200px"></canvas>'
+        +'<div style="text-align:center;color:rgba(245,237,214,.25);font-size:12px;padding:20px 0;width:100%">No enquiries yet</div>';
+    } else if(_statusChart){
+      _statusChart.data.datasets[0].data=counts;
+      _statusChart.update();
+    } else if(enqs.length){
+      var ctx=document.getElementById('statusChart').getContext('2d');
+      _statusChart=new Chart(ctx,{
+        type:'doughnut',
+        data:{
+          labels:labels,
+          datasets:[{
+            data:counts,
+            backgroundColor:colors,
+            borderColor:'#0D1526',
+            borderWidth:3,
+            hoverOffset:8
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:true,
+          animation:{animateRotate:true,duration:700},
+          cutout:'62%',
+          plugins:{
+            legend:{
+              position:'bottom',
+              labels:{
+                color:'rgba(245,237,214,.6)',
+                font:{size:11,family:"'Montserrat',sans-serif"},
+                padding:14,
+                boxWidth:12,
+                usePointStyle:true
+              }
+            },
+            tooltip:{
+              callbacks:{
+                label:function(ctx){
+                  var total=ctx.dataset.data.reduce(function(a,b){return a+b;},0)||1;
+                  var pct=Math.round((ctx.parsed/total)*100);
+                  return ' '+ctx.label+': '+ctx.parsed+' ('+pct+'%)';
+                }
+              }
+            }
+          }
+        }
+      });
     }
   }
-  // Category interest breakdown
+
+  // ── Bar: Category Interest ──
   var catCounts={};
   enqs.forEach(function(e){
     var c=e.interest||'Unspecified';
     catCounts[c]=(catCounts[c]||0)+1;
   });
-  var cEl=document.getElementById('catAnalytics');
-  if(cEl){
-    var keys=Object.keys(catCounts).sort(function(a,b){return catCounts[b]-catCounts[a];});
-    if(!keys.length){cEl.innerHTML='<div style="text-align:center;color:rgba(245,237,214,.25);font-size:12px;padding:20px 0">No enquiries yet</div>';}
-    else{
-      var max=catCounts[keys[0]]||1;
-      cEl.innerHTML=keys.map(function(k){
-        var c=catCounts[k];var pct=Math.round((c/max)*100);
-        return '<div style="margin-bottom:12px">'
-          +'<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span>'+esc(k)+'</span><span style="font-weight:700">'+c+'</span></div>'
-          +'<div style="height:6px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:var(--gold);border-radius:4px"></div></div>'
-          +'</div>';
-      }).join('');
+  var catKeys=Object.keys(catCounts).sort(function(a,b){return catCounts[b]-catCounts[a];});
+  var catVals=catKeys.map(function(k){return catCounts[k];});
+  var barColors=['#C9A227','#60a5fa','#4ade80','#fbbf24','#ff6b6b','#a78bfa','#f472b6','#34d399'];
+  var cCanvas=document.getElementById('catChart');
+  var cContainer=document.getElementById('catAnalytics');
+  if(cCanvas){
+    if(!catKeys.length){
+      if(_catChart){_catChart.destroy();_catChart=null;}
+      cContainer.innerHTML='<canvas id="catChart" style="max-height:200px"></canvas>'
+        +'<div style="text-align:center;color:rgba(245,237,214,.25);font-size:12px;padding:20px 0;width:100%">No enquiries yet</div>';
+    } else if(_catChart){
+      _catChart.data.labels=catKeys;
+      _catChart.data.datasets[0].data=catVals;
+      _catChart.data.datasets[0].backgroundColor=catKeys.map(function(_,i){return barColors[i%barColors.length];});
+      _catChart.update();
+    } else if(catKeys.length){
+      var cctx=document.getElementById('catChart').getContext('2d');
+      _catChart=new Chart(cctx,{
+        type:'bar',
+        data:{
+          labels:catKeys,
+          datasets:[{
+            label:'Enquiries',
+            data:catVals,
+            backgroundColor:catKeys.map(function(_,i){return barColors[i%barColors.length]+'cc';}),
+            borderColor:catKeys.map(function(_,i){return barColors[i%barColors.length];}),
+            borderWidth:1.5,
+            borderRadius:4,
+            borderSkipped:false
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:true,
+          animation:{duration:700},
+          plugins:{
+            legend:{display:false},
+            tooltip:{
+              callbacks:{
+                label:function(ctx){return ' '+ctx.parsed.y+' enquir'+(ctx.parsed.y===1?'y':'ies');}
+              }
+            }
+          },
+          scales:{
+            x:{
+              ticks:{color:'rgba(245,237,214,.5)',font:{size:10,family:"'Montserrat',sans-serif"},maxRotation:35,minRotation:0},
+              grid:{color:'rgba(255,255,255,.04)'},
+              border:{color:'rgba(255,255,255,.08)'}
+            },
+            y:{
+              beginAtZero:true,
+              ticks:{color:'rgba(245,237,214,.4)',font:{size:10},stepSize:1,precision:0},
+              grid:{color:'rgba(255,255,255,.06)'},
+              border:{color:'rgba(255,255,255,.08)'}
+            }
+          }
+        }
+      });
     }
   }
-  // Activity log
+
+  // ── Activity Log ──
   var aEl=document.getElementById('activityTb');
   if(aEl){
     var log=getActivityLog();
@@ -1432,7 +1686,7 @@ function saveProd(){
   var prods=getProds();
   var eid=document.getElementById('pid').value;
   var urlVal=document.getElementById('pphoto').value.trim();
-  if(urlVal)currentPhotosData.push(urlVal); // catch any URL typed but not explicitly added
+  if(urlVal)currentPhotosData.push(urlVal);
   var photosFinal=currentPhotosData.slice();
   var p={
     id:eid?parseInt(eid):Date.now(),
@@ -1442,15 +1696,16 @@ function saveProd(){
     badge:document.getElementById('pb').value,
     stock:document.getElementById('pstock').value||'instock',
     photos:photosFinal,
-    photo:photosFinal[0]||'', // keep legacy field in sync for old rendering code
+    photo:photosFinal[0]||'',
     desc:document.getElementById('pd').value.trim()
   };
   if(eid){var idx=prods.findIndex(function(x){return x.id===parseInt(eid)});if(idx>=0){p.featured=prods[idx].featured;prods[idx]=p;}else prods.push(p)}
   else prods.push(p);
-  setProds(prods);
+
+  setProds(prods); // saves to IndexedDB (no 5MB limit) + Firebase
   renderProds();updateDash();
   closeMod('prodModal');
-  toast(eid?'Product updated!':'Product added!','ok');
+  toast(eid?'Product updated! ✅':'Product added! ✅','ok');
   logActivity(eid?'Updated product "'+name+'"':'Added product "'+name+'"');
   var la=document.getElementById('lastAdded');
   if(la)la.textContent='Last added: '+name;
@@ -1758,6 +2013,20 @@ function saveC(sec){
     d={s1v:document.getElementById('s1v').value,s1l:document.getElementById('s1l').value,s2v:document.getElementById('s2v').value,s2l:document.getElementById('s2l').value,s3v:document.getElementById('s3v').value,s3l:document.getElementById('s3l').value};
   } else if(sec==='about'){
     d={about:document.getElementById('fabout').value,year:document.getElementById('fyear').value};
+  } else if(sec==='location'){
+    d={addr:document.getElementById('locaddr').value,url:document.getElementById('locurl').value};
+  } else if(sec==='faqs'){
+    var raw=document.getElementById('cfaqs').value;
+    d=raw.split('\n').map(function(line){
+      var parts=line.split('::');
+      if(parts.length<2)return null;
+      var q=parts[0].trim();
+      var a=parts.slice(1).join('::').trim();
+      if(!q||!a)return null;
+      return {q:q,a:a};
+    }).filter(Boolean);
+  } else if(sec==='aichat'){
+    d={url:document.getElementById('aiWorkerUrl').value.trim()};
   }
   S.s('content_'+sec,d);
   toast('Saved successfully!','ok');
@@ -1786,6 +2055,9 @@ function exportData(){
     content_contact:S.g('content_contact'),
     content_stats:S.g('content_stats'),
     content_about:S.g('content_about'),
+    content_location:S.g('content_location'),
+    content_faqs:S.g('content_faqs'),
+    content_aichat:S.g('content_aichat'),
     exportedAt:new Date().toISOString()
   };
   var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
@@ -1815,6 +2087,9 @@ function importData(input){
       if(d.content_contact)S.s('content_contact',d.content_contact);
       if(d.content_stats)S.s('content_stats',d.content_stats);
       if(d.content_about)S.s('content_about',d.content_about);
+      if(d.content_location)S.s('content_location',d.content_location);
+      if(d.content_faqs)S.s('content_faqs',d.content_faqs);
+      if(d.content_aichat)S.s('content_aichat',d.content_aichat);
       refreshCatDropdowns();renderProds();renderCats();renderEnqs();updateDash();loadContentFields();
       toast('Backup restored successfully!','ok');
       logActivity('Imported data backup');
@@ -1870,6 +2145,16 @@ function buildWebsiteHTML(){
   var contact=S.g('content_contact')||{ph:'+91 98765 43210',em:'wholesale@thejeansclub.in',hr:'Mon-Sat, 9AM-7PM',gst:'27XXXXX1234Z5'};
   var stats=S.g('content_stats')||{s1v:'15K+',s1l:'Active Retailers',s2v:'500+',s2l:'SKUs Available',s3v:'48h',s3l:'Dispatch SLA'};
   var about=S.g('content_about')||{about:"India's leading wholesale men's fashion brand.",year:new Date().getFullYear()};
+  var location=S.g('content_location')||{addr:'',url:''};
+  var hasLocation=!!(location.addr||location.url);
+  var locQuery=encodeURIComponent(location.addr||'');
+  var mapsLink=location.url||(locQuery?('https://www.google.com/maps/search/?api=1&query='+locQuery):'');
+  var mapsEmbedSrc=locQuery?('https://www.google.com/maps?q='+locQuery+'&output=embed'):'';
+  var faqs=S.g('content_faqs')||DEF_FAQS;
+  var embeddedFaqs=JSON.stringify(faqs);
+  var aiChat=S.g('content_aichat')||{url:''};
+  var embeddedAiUrl=JSON.stringify(aiChat.url||'');
+  var embeddedBiz=JSON.stringify({name:'The Jeans Club',about:about.about,phone:contact.ph,address:location.addr});
   var featuredProds=prods.filter(function(p){return p.featured!==false;});
   var phone=contact.ph.replace(/\D/g,'');
   var embeddedPhone=JSON.stringify(phone);
@@ -1879,7 +2164,7 @@ function buildWebsiteHTML(){
 
   var catsHTML=cats.map(function(c){
     var img=c.photo?'<img src="'+eH(c.photo)+'" alt="'+eH(c.name)+'" onerror="this.style.display=\'none\'">':'<div class="no-img"><span>'+eH(c.name.charAt(0))+'</span></div>';
-    return '<a class="cat-item" href="javascript:void(0)" onclick="openCatView(\''+eH(c.id)+'\')"><div class="cat-img">'+img+'</div><div class="cat-info"><p class="cat-name">'+eH(c.name)+'</p>'+(c.styles?'<p class="cat-sub">'+eH(c.styles)+'</p>':'')+'</div></a>';
+    return '<a class="cat-item anim-item" href="javascript:void(0)" onclick="openCatView(\''+eH(c.id)+'\')"><div class="cat-img">'+img+'</div><div class="cat-info"><p class="cat-name">'+eH(c.name)+'</p>'+(c.styles?'<p class="cat-sub">'+eH(c.styles)+'</p>':'')+'</div></a>';
   }).join('');
 
   function fromPriceLabel(price){
@@ -1896,7 +2181,7 @@ function buildWebsiteHTML(){
   var heroImages=[heroImg].concat(cats.map(function(c){return c.photo;})).filter(function(u,i,arr){return u&&arr.indexOf(u)===i;});
 
   // Embed ALL products + categories for client-side category filtering
-  var embeddedAllProds=JSON.stringify(prods.map(function(p){return {name:p.name,cat:p.cat,priceLabel:fromPriceLabel(p.price),sku:p.sku,badge:p.badge,photo:p.photo,photos:p.photos||[],stock:p.stock};}));
+  var embeddedAllProds=JSON.stringify(prods.map(function(p){return {name:p.name,cat:p.cat,priceLabel:fromPriceLabel(p.price),sku:p.sku,badge:p.badge,photo:p.photo,photos:p.photos||[],stock:p.stock,moq:p.moq||'',desc:p.desc||''};}));
   var embeddedCats=JSON.stringify(cats.map(function(c){return {id:c.id,name:c.name};}));
 
   return '<!DOCTYPE html>\n<html lang="en">\n<head>'
@@ -1917,9 +2202,10 @@ function buildWebsiteHTML(){
     +'\nhtml{font-size:16px;scroll-behavior:smooth}'
     +'\nbody{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;background:#fff;color:#000;-webkit-font-smoothing:antialiased}'
     +'\na{color:inherit;text-decoration:none}'
-    +'\nimg{width:100%;height:100%;object-fit:cover;display:block}'
-    +'\n.nav{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:#fff;border-bottom:1px solid #e5e5e5}'
-    +'\n.nav-logo{font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;display:flex;align-items:center;gap:8px}.nav-logo img{height:36px;width:36px;object-fit:contain}.nav-logo-text{display:flex;flex-direction:column;gap:1px;line-height:1.1}.nav-tagline{font-size:8px;font-weight:500;letter-spacing:1.5px;text-transform:none;color:#999}'
+    +'\nimg{width:100%;display:block}'
+    +'\n.nav{position:sticky;top:0;left:0;right:0;z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:#fff;border-bottom:1px solid #e5e5e5;transition:height .3s ease,box-shadow .3s ease}'
+    +'\n.nav.scrolled{height:44px;box-shadow:0 2px 16px rgba(0,0,0,.08)}'
+    +'\n.nav-logo{font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;display:flex;align-items:center;gap:8px;transition:gap .3s}.nav-logo img{height:36px;width:36px;object-fit:contain;transition:height .3s,width .3s}.nav.scrolled .nav-logo img{height:28px;width:28px}.nav-logo-text{display:flex;flex-direction:column;gap:1px;line-height:1.1}.nav-tagline{font-size:8px;font-weight:500;letter-spacing:1.5px;text-transform:none;color:#999;transition:opacity .3s}.nav.scrolled .nav-tagline{opacity:0}'
     +'\n.nav-right{display:flex;align-items:center;gap:24px}'
     +'\n.nav-link{font-size:11px;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid transparent;padding-bottom:1px;transition:border-color .2s;cursor:pointer}'
     +'\n.nav-link:hover{border-bottom-color:#000}'
@@ -1930,12 +2216,12 @@ function buildWebsiteHTML(){
     +'\n.ham.open span:nth-child(1){transform:translateY(6px) rotate(45deg)}'
     +'\n.ham.open span:nth-child(2){opacity:0}'
     +'\n.ham.open span:nth-child(3){transform:translateY(-6px) rotate(-45deg)}'
-    +'\n.mob-menu{display:none;position:fixed;inset:0;top:56px;background:#fff;z-index:999;padding:32px 24px 80px;overflow-y:auto}'
+    +'\n.mob-menu{display:none;position:fixed;inset:0;top:0;background:#fff;z-index:999;padding:72px 24px 80px;overflow-y:auto}'
     +'\n.mob-menu.open{display:block}'
     +'\n.mob-item{display:block;font-size:28px;font-weight:300;padding:14px 0;border-bottom:1px solid #e5e5e5;transition:padding .2s}'
     +'\n.mob-item:hover{padding-left:8px}'
     +'\n.mob-wa{display:block;margin-top:32px;background:#000;color:#fff;text-align:center;padding:16px;font-size:12px;letter-spacing:2px;text-transform:uppercase}'
-    +'\n.hero{height:100vh;position:relative;display:flex;align-items:flex-end;padding:0 24px 80px;margin-top:56px}'
+    +'\n.hero{height:100vh;position:relative;display:flex;align-items:flex-end;padding:0 24px 80px}'
     +'\n.hero-bg{position:absolute;inset:0;background:#111;overflow:hidden}'
     +'\n.hero-slide{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;z-index:0;transition:opacity 1s ease-in-out}'
     +'\n.hero-slide.active{opacity:.8}'
@@ -1968,7 +2254,8 @@ function buildWebsiteHTML(){
     +'\n.sec-link{font-size:11px;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid #000;padding-bottom:1px}'
     +'\n.sec-link:hover{color:#666;border-color:#666}'
     +'\n.cats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}'
-    +'\n.cat-item{display:block;cursor:pointer;background:#f5f5f5}'
+    +'\n.cat-item{display:block;cursor:pointer;background:#f5f5f5;transition:transform .3s ease,box-shadow .3s ease}'
+    +'\n.cat-item:hover{transform:scale(1.03);box-shadow:0 12px 32px rgba(0,0,0,.12);position:relative;z-index:1}'
     +'\n.cat-img{aspect-ratio:3/4;overflow:hidden;position:relative}'
     +'\n.cat-img img{width:100%;height:100%;object-fit:cover;transition:transform .6s ease}'
     +'\n.cat-item:hover .cat-img img{transform:scale(1.05)}'
@@ -1978,9 +2265,10 @@ function buildWebsiteHTML(){
     +'\n.cat-name{font-size:12px;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}'
     +'\n.cat-sub{font-size:11px;color:#888}'
     +'\n.prods-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}'
-    +'\n.prod-item{display:block;cursor:pointer}'
+    +'\n.prod-item{display:block;cursor:pointer;transition:transform .3s ease,box-shadow .3s ease}'
+    +'\n.prod-item:hover{transform:scale(1.03);box-shadow:0 12px 32px rgba(0,0,0,.12);position:relative;z-index:1}'
     +'\n.prod-img{position:relative;aspect-ratio:3/4;overflow:hidden;background:#f5f5f5}'
-    +'\n.prod-img img{width:100%;height:100%;object-fit:cover;transition:transform .6s ease}'
+    +'\n.prod-img img{width:100%;height:100%;object-fit:contain;transition:transform .6s ease;background:#f5f5f5}'
     +'\n.prod-item:hover .prod-img img{transform:scale(1.05)}'
     +'\n.prod-hover{position:absolute;inset:0;background:rgba(0,0,0,.22);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .3s}'
     +'\n.prod-item:hover .prod-hover{opacity:1}'
@@ -2024,8 +2312,35 @@ function buildWebsiteHTML(){
     +'\n.cat-view-close{background:none;border:none;font-size:28px;cursor:pointer;color:#000;line-height:1;padding:4px 8px;flex-shrink:0}'
     +'\n.cat-view-empty{display:none;text-align:center;padding:60px 20px;color:#888}'
     +'\n.cat-view-empty p{font-size:13px;margin-bottom:24px;letter-spacing:.5px}'
-    +'\n.wa-btn{position:fixed;bottom:24px;right:24px;z-index:9999;background:#25D366;color:#fff;width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(37,211,102,.4);transition:transform .3s}'
+    +'\n.wa-btn{position:fixed;bottom:20px;right:20px;z-index:9999;background:#25D366;color:#fff;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(37,211,102,.4);transition:transform .3s}'
     +'\n.wa-btn:hover{transform:scale(1.1)}'
+    +'\n.wa-btn svg{width:21px;height:21px}'
+    +'\n.shop-btn{position:fixed;bottom:70px;right:20px;z-index:9999;background:#0d1a2e;color:#c9a227;border:1.5px solid #c9a227;width:42px;height:42px;border-radius:50%;font-size:17px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:transform .3s}'
+    +'\n.shop-btn:hover{transform:scale(1.06)}'
+    +'\n.chat-btn{position:fixed;bottom:120px;right:20px;z-index:9999;background:#000;color:#fff;width:42px;height:42px;border-radius:50%;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:transform .3s;border:none;cursor:pointer}'
+    +'\n.chat-btn:hover{transform:scale(1.06)}'
+    +'\n.chat-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;width:100%;height:100%;background:#fff;display:none;flex-direction:column;overflow:hidden}'
+    +'\n.chat-panel.open{display:flex}'
+    +'\n.chat-head{background:#000;color:#fff;padding:16px 18px;padding-top:calc(16px + env(safe-area-inset-top));display:flex;justify-content:space-between;align-items:center;flex-shrink:0}'
+    +'\n.chat-head-title{font-size:15px;font-weight:700;letter-spacing:.5px}'
+    +'\n.chat-head-sub{font-size:11px;color:rgba(255,255,255,.55);margin-top:2px}'
+    +'\n.chat-close{background:none;border:none;color:#fff;font-size:26px;cursor:pointer;line-height:1;padding:4px 6px}'
+    +'\n.chat-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:#fafafa}'
+    +'\n.chat-bubble{max-width:82%;padding:10px 14px;border-radius:16px;font-size:13.5px;line-height:1.6}'
+    +'\n.chat-bubble.bot{background:#fff;border:1px solid #ececec;align-self:flex-start;border-bottom-left-radius:3px}'
+    +'\n.chat-bubble.user{background:#000;color:#fff;align-self:flex-end;border-bottom-right-radius:3px}'
+    +'\n.chat-bubble a{color:#25D366;font-weight:700;text-decoration:underline}'
+    +'\n.chat-chips{display:flex;flex-wrap:wrap;gap:7px;padding:0 16px 14px;flex-shrink:0}'
+    +'\n.chat-chip{background:#fff;border:1px solid #ddd;border-radius:16px;padding:8px 13px;font-size:12.5px;cursor:pointer;font-family:inherit}'
+    +'\n.chat-chip:hover{background:#000;color:#fff;border-color:#000}'
+    +'\n.chat-foot{display:flex;border-top:1px solid #eee;padding:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom));flex-shrink:0;background:#fff}'
+    +'\n.chat-input{flex:1;border:none;outline:none;font-size:14px;padding:10px;font-family:inherit}'
+    +'\n.chat-send{background:#000;color:#fff;border:none;padding:0 18px;font-size:12px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;border-radius:20px;font-family:inherit}'
+    +'\n.map-sec{padding:56px 24px;border-top:1px solid #e5e5e5}'
+    +'\n.map-inner{max-width:1100px;margin:0 auto}'
+    +'\n.map-inner iframe{width:100%;height:340px;border:0;border-radius:4px}'
+    +'\n.map-addr{font-size:13px;color:#555;margin-top:14px;line-height:1.6}'
+    +'\n.map-dir-btn{display:inline-block;margin-top:14px;background:#000;color:#fff;padding:11px 24px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;text-decoration:none}'
     +'\n@media(max-width:900px){'
     +'\n.nav-right .nav-link,.nav-wa{display:none}'
     +'\n.ham{display:flex}'
@@ -2042,6 +2357,44 @@ function buildWebsiteHTML(){
     +'\n.cats-grid,.prods-grid{grid-template-columns:repeat(2,1fr);gap:1px}'
     +'\n.section{padding:56px 16px}'
     +'}'
+    +'\n@keyframes fadeInUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}'
+    +'\n@keyframes fadeInUpDim{from{opacity:0;transform:translateY(28px)}to{opacity:.55;transform:translateY(0)}}'
+    +'\n.anim-item{opacity:0}'
+    +'\n.anim-item.visible{animation:fadeInUp .5s ease forwards}'
+    +'\n.anim-item.anim-oos.visible{animation:fadeInUpDim .5s ease forwards}'
+    +'\n.qv-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:9000;align-items:stretch;justify-content:stretch;padding:0;overflow-y:auto}'
+    +'\n.qv-overlay.open{display:flex}'
+    +'\n.qv-box{background:#fff;width:100%;height:100%;max-width:none;max-height:none;overflow-y:auto;border-radius:0;display:grid;grid-template-columns:1fr 1fr;position:relative}'
+    +'\n@media(max-width:640px){.qv-box{grid-template-columns:1fr;height:auto}}'
+    +'\n.qv-close{position:absolute;top:14px;right:14px;background:rgba(0,0,0,.08);border:none;font-size:18px;line-height:1;cursor:pointer;z-index:10;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#000;transition:background .2s}'
+    +'\n.qv-close:hover{background:rgba(0,0,0,.18)}'
+    +'\n.qv-slider{position:relative;background:#f5f5f5;overflow:hidden;min-height:100vh}'
+    +'\n@media(max-width:640px){.qv-slider{min-height:60vw;aspect-ratio:4/3}}'
+    +'\n.qv-slide{position:absolute;inset:0;opacity:0;transition:opacity .35s}'
+    +'\n.qv-slide.active{opacity:1}'
+    +'\n.qv-slide img{width:100%;height:100%;object-fit:contain;display:block;background:#f5f5f5}'
+    +'\n.qv-no-img{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:72px;font-weight:300;color:#ccc;background:#f5f5f5}'
+    +'\n.qv-arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.9);border:none;width:36px;height:36px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;z-index:2;transition:background .2s;border-radius:50%}'
+    +'\n.qv-arrow:hover{background:#fff}'
+    +'\n.qv-arr-l{left:10px}'
+    +'\n.qv-arr-r{right:10px}'
+    +'\n.qv-counter{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;font-size:11px;letter-spacing:1px;padding:4px 10px;border-radius:20px}'
+    +'\n.qv-dots{position:absolute;bottom:44px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:3}'
+    +'\n.qv-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.45);border:none;cursor:pointer;padding:0;transition:background .2s,transform .2s}'
+    +'\n.qv-dot.active{background:#fff;transform:scale(1.3)}'
+    +'\n.qv-swipe-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.45);color:#fff;font-size:11px;letter-spacing:.5px;padding:7px 14px;border-radius:20px;pointer-events:none;opacity:1;transition:opacity .5s;z-index:5;white-space:nowrap}'
+    +'\n.qv-info{padding:32px 28px;display:flex;flex-direction:column}'
+    +'\n.qv-badge{font-size:9px;letter-spacing:2px;text-transform:uppercase;background:#000;color:#fff;display:inline-block;padding:4px 9px;margin-bottom:14px;width:fit-content}'
+    +'\n.qv-name{font-size:22px;font-weight:300;letter-spacing:-0.5px;line-height:1.2;margin-bottom:8px}'
+    +'\n.qv-sku{font-size:10px;letter-spacing:2px;color:#999;text-transform:uppercase;margin-bottom:16px}'
+    +'\n.qv-price{font-size:18px;font-weight:600;margin-bottom:6px}'
+    +'\n.qv-moq{font-size:12px;color:#666;margin-bottom:10px}'
+    +'\n.qv-stock-in{display:inline-block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#2e7d32;background:#e8f5e9;padding:4px 10px;border-radius:2px;margin-bottom:18px}'
+    +'\n.qv-stock-out{display:inline-block;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#b71c1c;background:#ffebee;padding:4px 10px;border-radius:2px;margin-bottom:18px}'
+    +'\n.qv-divider{border:none;border-top:1px solid #e5e5e5;margin:16px 0}'
+    +'\n.qv-desc{font-size:12.5px;color:#555;line-height:1.8;flex:1}'
+    +'\n.qv-wa-btn{display:flex;align-items:center;justify-content:center;gap:10px;background:#25D366;color:#fff;border:none;padding:14px 20px;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;font-family:inherit;margin-top:24px;transition:background .2s;border-radius:2px;text-decoration:none}'
+    +'\n.qv-wa-btn:hover{background:#1ebe5d}'
     +'\n</style>\n</head>\n<body>'
 
     +'\n<nav class="nav" id="mainnav">'
@@ -2115,6 +2468,14 @@ function buildWebsiteHTML(){
     +'\n</div>'
     +'\n</div>'
 
+    +'\n<div class="qv-overlay" id="qvOverlay" onclick="handleQvOverlayClick(event)">'
+    +'\n<div class="qv-box" id="qvBox">'
+    +'\n<button class="qv-close" onclick="closeQv()" title="Close">&times;</button>'
+    +'\n<div class="qv-slider" id="qvSlider"></div>'
+    +'\n<div class="qv-info" id="qvInfo"></div>'
+    +'\n</div>'
+    +'\n</div>'
+
     +'\n<section class="enq-sec" id="contact">'
     +'\n<div class="enq-inner">'
     +'\n<div class="enq-left">'
@@ -2137,6 +2498,16 @@ function buildWebsiteHTML(){
     +'\n<div class="enq-success" id="enq-success">&#10003; Received. We will contact you on WhatsApp shortly.</div>'
     +'\n</div></div></section>'
 
+    +(hasLocation
+      ?'\n<section class="map-sec" id="shoplocation">'
+      +'\n<div class="map-inner">'
+      +'\n<div class="sec-header"><span class="sec-title">Visit Our Store</span></div>'
+      +(mapsEmbedSrc?'\n<iframe src="'+eH(mapsEmbedSrc)+'" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Shop Location"></iframe>':'')
+      +(location.addr?'\n<p class="map-addr">'+eH(location.addr)+'</p>':'')
+      +(mapsLink?'\n<a class="map-dir-btn" href="'+eH(mapsLink)+'" target="_blank">Get Directions</a>':'')
+      +'\n</div></section>'
+      :'')
+
     +'\n<footer class="footer">'
     +'\n<div class="footer-inner">'
     +'\n<div><div class="f-logo">TJC</div><p class="f-about">'+eH(about.about)+'</p></div>'
@@ -2150,19 +2521,134 @@ function buildWebsiteHTML(){
     +'\n<svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>'
     +'\n</a>'
 
+    +(mapsLink?'\n<a class="shop-btn" href="'+eH(mapsLink)+'" target="_blank" title="Shop Location">\ud83d\udccd</a>':'')
+
+    +(faqs.length
+      ?'\n<button class="chat-btn" onclick="toggleChat()" title="Chat with us">\ud83d\udcac</button>'
+      +'\n<div class="chat-panel" id="chatPanel">'
+      +'\n<div class="chat-head"><div><div class="chat-head-title">TJC Assistant</div><div class="chat-head-sub">Usually replies instantly</div></div><button class="chat-close" onclick="toggleChat()">&times;</button></div>'
+      +'\n<div class="chat-body" id="chatBody"></div>'
+      +'\n<div class="chat-chips" id="chatChips"></div>'
+      +'\n<div class="chat-foot"><input class="chat-input" id="chatInput" placeholder="Apna sawaal type karein..." onkeydown="if(event.key===\'Enter\')sendChatMsg();"><button class="chat-send" onclick="sendChatMsg()">Send</button></div>'
+      +'\n</div>'
+      :'')
+
     +'\n<script>'
     +'\nvar PHONE='+embeddedPhone+';'
     +'\nvar ALLPRODS='+embeddedAllProds+';'
     +'\nvar CATS='+embeddedCats+';'
+    +'\nvar FAQS='+embeddedFaqs+';'
+    +'\nvar AI_URL='+embeddedAiUrl+';'
+    +'\nvar BIZ='+embeddedBiz+';'
     +'\nfunction smoothTo(id){var el=document.getElementById(id);if(el)el.scrollIntoView({behavior:"smooth"});}'
+    +'\nfunction _saveState(){try{sessionStorage.setItem("tjc_scroll",window.scrollY);var cv=document.getElementById("catView");sessionStorage.setItem("tjc_catview",cv&&cv.classList.contains("open")?document.getElementById("catViewTitle").textContent:"");}catch(e){}}'
+    +'\nwindow.addEventListener("scroll",function(){_saveState();},true);'
+    +'\nwindow.addEventListener("beforeunload",function(){_saveState();});'
+    +'\n(function _restoreState(){try{var sy=parseInt(sessionStorage.getItem("tjc_scroll")||"0",10);var cvName=sessionStorage.getItem("tjc_catview")||"";if(sy>0){setTimeout(function(){window.scrollTo(0,sy);},80);}if(cvName){var cats=typeof CATS!=="undefined"?CATS:[];var cat=cats.find(function(c){return c.name===cvName;});if(cat){setTimeout(function(){openCatView(cat.id);},120);}}}catch(e){}})();'
+    +'\nvar _chatStarted=false;'
+    +'\nvar _chatHistory=[];'
+    +'\nfunction toggleChat(){var p=document.getElementById("chatPanel");if(!p)return;p.classList.toggle("open");document.body.style.overflow=p.classList.contains("open")?"hidden":"";if(p.classList.contains("open")&&!_chatStarted){_chatStarted=true;addChatBubble("bot","Namaste! \ud83d\udc4b TJC me aapka swagat hai. Aap neeche diye gaye sawaal tap kar sakte hain ya apna sawaal type kar sakte hain.");renderChatChips();}}'
+    +'\nfunction addChatBubble(who,html){var body=document.getElementById("chatBody");if(!body)return;var d=document.createElement("div");d.className="chat-bubble "+who;d.innerHTML=html;body.appendChild(d);body.scrollTop=body.scrollHeight;return d;}'
+    +'\nfunction renderChatChips(){var wrap=document.getElementById("chatChips");if(!wrap)return;wrap.innerHTML="";FAQS.slice(0,5).forEach(function(f){var b=document.createElement("button");b.className="chat-chip";b.textContent=f.q;b.onclick=function(){addChatBubble("user",f.q.replace(/</g,"&lt;"));handleBotReply(f.q,f.a);};wrap.appendChild(b);});}'
+    +'\nfunction matchFaq(query){var qWords=query.toLowerCase().replace(/[^\\w\\s\\u0900-\\u097F]/g," ").split(/\\s+/).filter(function(w){return w.length>1;});var best=null,bestScore=0;FAQS.forEach(function(f){var fWords=f.q.toLowerCase().replace(/[^\\w\\s\\u0900-\\u097F]/g," ").split(/\\s+/);var score=0;qWords.forEach(function(w){if(fWords.indexOf(w)>=0)score++;});if(score>bestScore){bestScore=score;best=f;}});return bestScore>0?best:null;}'
+    +'\nfunction handleBotReply(userMsg,knownAnswer){_chatHistory.push({role:"user",content:userMsg});_chatHistory.push({role:"assistant",content:knownAnswer});addChatBubble("bot",knownAnswer.replace(/</g,"&lt;"));}'
+    +'\nfunction fallbackReply(userMsg){var match=matchFaq(userMsg);if(match){addChatBubble("bot",match.a.replace(/</g,"&lt;"));}else{addChatBubble("bot",\'Sorry, iska exact jawab mere paas nahi hai. Aap directly hamare team se <a href="https://wa.me/\'+PHONE+\'" target="_blank">WhatsApp</a> par baat kar sakte hain.\');}}'
+    +'\nfunction callAiBackend(userMsg){var typingEl=addChatBubble("bot","\u2022\u2022\u2022");return fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,history:_chatHistory.slice(-8),business:Object.assign({},BIZ,{categories:CATS,products:ALLPRODS})})}).then(function(r){if(!r.ok)throw new Error("bad status");return r.json();}).then(function(data){typingEl.remove();if(data&&data.reply){_chatHistory.push({role:"user",content:userMsg});_chatHistory.push({role:"assistant",content:data.reply});addChatBubble("bot",data.reply.replace(/</g,"&lt;").replace(/\\n/g,"<br>"));}else{fallbackReply(userMsg);}}).catch(function(){typingEl.remove();fallbackReply(userMsg);});}'
+    +'\nfunction sendChatMsg(){var inp=document.getElementById("chatInput");var msg=(inp.value||"").trim();if(!msg)return;addChatBubble("user",msg.replace(/</g,"&lt;"));inp.value="";if(AI_URL){callAiBackend(msg);}else{fallbackReply(msg);}}'
     +'\nvar _logoClickCount=0,_logoClickTimer=null;'
     +'\nfunction handleLogoTripleClick(){_logoClickCount++;if(_logoClickTimer)clearTimeout(_logoClickTimer);if(_logoClickCount>=3){_logoClickCount=0;clearTimeout(_logoClickTimer);window.parent.openAdminOverlay&&window.parent.openAdminOverlay();return;}_logoClickTimer=setTimeout(function(){_logoClickCount=0;},600);}'
     +'\n(function(){var slides=document.querySelectorAll(".hero-slide");if(slides.length<2)return;var idx=0;setInterval(function(){slides[idx].classList.remove("active");idx=(idx+1)%slides.length;slides[idx].classList.add("active");},2000);})();'
     +'\nfunction toggleMob(){var m=document.getElementById("mobmenu"),h=document.getElementById("hambtn");m.classList.toggle("open");h.classList.toggle("open");document.body.style.overflow=m.classList.contains("open")?"hidden":"";}'
     +'\nfunction closeMob(){document.getElementById("mobmenu").classList.remove("open");document.getElementById("hambtn").classList.remove("open");document.body.style.overflow="";}'
     +'\ndocument.addEventListener("click",function(e){var m=document.getElementById("mobmenu"),h=document.getElementById("hambtn");if(m.classList.contains("open")&&!m.contains(e.target)&&!h.contains(e.target))closeMob();});'
-    +'\nvar mainnav=document.getElementById("mainnav");\nwindow.addEventListener("scroll",function(){var pos=window.scrollY+80,active="home";["home","catalogue","contact"].forEach(function(id){var el=document.getElementById(id);if(el&&el.getBoundingClientRect().top+window.scrollY<=pos)active=id;});document.querySelectorAll(".nav-link").forEach(function(a){a.style.borderBottomColor=a.getAttribute("data-sec")===active?"#000":"transparent";});mainnav.style.boxShadow=window.scrollY>10?"0 2px 12px rgba(0,0,0,.06)":"none";});'
-    +'\nfunction prodCardHTML(p){var oos=p.stock==="outofstock";var img=p.photo?\'<img src="\'+p.photo+\'" alt="\'+p.name+\'" onerror="this.style.display=\\\'none\\\'">\':\'<div class="no-img"><span>\'+(p.name||"P").charAt(0)+\'</span></div>\';var pc=(p.photos&&p.photos.length>1)?\'<span class="prod-photo-count">📷 \'+p.photos.length+\'</span>\':"";if(oos){return \'<div class="prod-item" style="opacity:.55;cursor:default"><div class="prod-img">\'+img+\'<span class="prod-badge" style="background:#000;color:#fff">Out of Stock</span></div><div class="prod-info"><p class="prod-name">\'+p.name+\'</p><p class="prod-price">Currently Unavailable</p></div></div>\';}var waMsg=encodeURIComponent(\'Hi TJC! Enquiry about "\'+p.name+\'" SKU:\'+(p.sku||"N/A"));return \'<a class="prod-item" href="https://wa.me/\'+PHONE+\'?text=\'+waMsg+\'" target="_blank"><div class="prod-img">\'+img+(p.badge?\'<span class="prod-badge">\'+p.badge+\'</span>\':"")+pc+\'<div class="prod-hover"><span>ENQUIRE NOW</span></div></div><div class="prod-info"><p class="prod-name">\'+p.name+\'</p><p class="prod-price">Enquire for Price</p></div></a>\';}'
+    +'\nvar mainnav=document.getElementById("mainnav");\nwindow.addEventListener("scroll",function(){var pos=window.scrollY+80,active="home";["home","catalogue","contact"].forEach(function(id){var el=document.getElementById(id);if(el&&el.getBoundingClientRect().top+window.scrollY<=pos)active=id;});document.querySelectorAll(".nav-link").forEach(function(a){a.style.borderBottomColor=a.getAttribute("data-sec")===active?"#000":"transparent";});if(window.scrollY>40){mainnav.classList.add("scrolled");}else{mainnav.classList.remove("scrolled");}});'
+    +'\n(function(){'
+    +'\nif(!window.IntersectionObserver)return;'
+    +'\nvar io=new IntersectionObserver(function(entries){entries.forEach(function(entry){if(entry.isIntersecting){var el=entry.target;var siblings=Array.prototype.slice.call(el.parentNode.children);var idx=siblings.indexOf(el);el.style.animationDelay=(idx*0.07)+"s";el.classList.add("visible");io.unobserve(el);}});},{threshold:0.12});'
+    +'\nfunction observeItems(){document.querySelectorAll(".anim-item:not(.visible)").forEach(function(el){io.observe(el);});}'
+    +'\nobserveItems();'
+    +'\nvar _mutObs=new MutationObserver(function(){observeItems();});'
+    +'\n_mutObs.observe(document.body,{childList:true,subtree:true});'
+    +'\n})();'
+    +'\nvar _qvProds=ALLPRODS;'
+    +'\nfunction prodCardHTML(p){var oos=p.stock==="outofstock";var img=p.photo?\'<img src="\'+p.photo+\'" alt="\'+p.name+\'" onerror="this.style.display=\\\'none\\\'">\':\'<div class="no-img"><span>\'+(p.name||"P").charAt(0)+\'</span></div>\';var pc=(p.photos&&p.photos.length>1)?\'<span class="prod-photo-count">📷 \'+p.photos.length+\'</span>\':"";var idx=ALLPRODS.indexOf(p);if(idx<0){idx=ALLPRODS.findIndex(function(x){return x.sku&&x.sku===p.sku;});}if(idx<0){idx=ALLPRODS.findIndex(function(x){return x.name===p.name;});}if(oos){return \'<div class="prod-item anim-item anim-oos"><div class="prod-img">\'+img+\'<span class="prod-badge" style="background:#000;color:#fff">Out of Stock</span></div><div class="prod-info"><p class="prod-name">\'+p.name+\'</p><p class="prod-price">Currently Unavailable</p></div></div>\';}return \'<div class="prod-item anim-item" style="cursor:pointer" onclick="openQv(\'+idx+\')"><div class="prod-img">\'+img+(p.badge?\'<span class="prod-badge">\'+p.badge+\'</span>\':"")+pc+\'<div class="prod-hover"><span>QUICK VIEW</span></div></div><div class="prod-info"><p class="prod-name">\'+p.name+\'</p><p class="prod-price">\'+(p.priceLabel||"Enquire for Price")+\'</p></div></div>\';}'
+    +'\nvar _qvIdx=0;'
+    +'\nfunction openQv(idx){'
+    +'\nvar p=ALLPRODS[idx];if(!p)return;'
+    +'\n_qvIdx=idx;'
+    +'\nvar allPhotos=(p.photos&&p.photos.length)?p.photos:(p.photo?[p.photo]:[]);'
+    +'\nvar sliderEl=document.getElementById("qvSlider");'
+    +'\nvar infoEl=document.getElementById("qvInfo");'
+    +'\nif(!sliderEl||!infoEl)return;'
+    +'\nif(allPhotos.length===0){sliderEl.innerHTML=\'<div class="qv-no-img">\'+(p.name||"P").charAt(0)+\'</div>\';}else{'
+    +'\nvar slidesHtml=allPhotos.map(function(ph,i){return \'<div class="qv-slide\'+(i===0?" active":"")+\'"><img src="\'+ph+\'" alt="\'+( p.name||"")+\'" onerror="this.style.display=\\\'none\\\'"></div>\';}).join("");'
+    +'\nvar dotsHtml=allPhotos.length>1?\'<div class="qv-dots" id="qvDots">\'+allPhotos.map(function(_,di){return \'<button class="qv-dot\'+(di===0?" active":"")+\'" onclick="qvGoTo(\'+di+\')"></button>\';}).join("")+\'</div>\':"";'
+    +'\nvar swipeHint=allPhotos.length>1?\'<div class="qv-swipe-hint" id="qvSwipeHint">👆 Swipe to see more photos</div>\':"";'
+    +'\nvar arrowsHtml=allPhotos.length>1?\'<button class="qv-arrow qv-arr-l" onclick="qvSlide(-1)">&#8249;</button><button class="qv-arrow qv-arr-r" onclick="qvSlide(1)">&#8250;</button><div class="qv-counter" id="qvCounter">1 / \'+allPhotos.length+\'</div>\':"";'
+    +'\nsliderEl.innerHTML=slidesHtml+arrowsHtml+dotsHtml+swipeHint;'
+    +'\nif(allPhotos.length>1){setTimeout(function(){var h=document.getElementById("qvSwipeHint");if(h)h.style.opacity="0";},2500);}'
+    +'}'
+    +'\nvar oos=p.stock==="outofstock";'
+    +'\nvar stockBadge=oos?\'<span class="qv-stock-out">Out of Stock</span>\':\'<span class="qv-stock-in">&#10003; In Stock</span>\';'
+    +'\nvar waMsg=encodeURIComponent(\'Hi TJC! Enquiry about "\'+p.name+\'" SKU:\'+(p.sku||"N/A")+(p.priceLabel?\' (Price: \'+p.priceLabel+\')\':"")+\'. Please share details.\');'
+    +'\nvar waBtnHtml=oos?"":\'<a class="qv-wa-btn" href="https://wa.me/\'+PHONE+\'?text=\'+waMsg+\'" target="_blank"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>Enquire on WhatsApp</a>\';'
+    +'\nvar ih="";'
+    +'\nif(p.badge)ih+=\'<span class="qv-badge">\'+p.badge+\'</span>\';'
+    +'\nih+=\'<h2 class="qv-name">\'+(p.name||"")+\'</h2>\';'
+    +'\nif(p.sku)ih+=\'<p class="qv-sku">SKU: \'+p.sku+\'</p>\';'
+    +'\nif(p.priceLabel)ih+=\'<p class="qv-price">\'+(p.priceLabel)+\'</p>\';'
+    +'\nif(p.moq)ih+=\'<p class="qv-moq">MOQ: \'+p.moq+\'</p>\';'
+    +'\nih+=\'<div>\'+stockBadge+\'</div>\';'
+    +'\nif(p.desc)ih+=\'<hr class="qv-divider"><p class="qv-desc">\'+(p.desc||"")+\'</p>\';'
+    +'\nih+=waBtnHtml;'
+    +'\ninfoEl.innerHTML=ih;'
+    +'\ndocument.getElementById("qvOverlay").classList.add("open");'
+    +'\ndocument.body.style.overflow="hidden";'
+    +'}'
+    +'\nfunction closeQv(){document.getElementById("qvOverlay").classList.remove("open");document.body.style.overflow="";}'
+    +'\nfunction handleQvOverlayClick(e){if(e.target===document.getElementById("qvOverlay"))closeQv();}'
+    +'\nfunction qvUpdateDots(next,total){'
+    +'\nvar dots=document.querySelectorAll(".qv-dot");'
+    +'\ndots.forEach(function(d,i){d.classList.toggle("active",i===next);});'
+    +'}'
+    +'\nfunction qvSlide(dir){'
+    +'\nvar slides=document.querySelectorAll(".qv-slide");'
+    +'\nif(!slides.length)return;'
+    +'\nvar current=-1;slides.forEach(function(s,i){if(s.classList.contains("active"))current=i;});'
+    +'\nvar next=(current+dir+slides.length)%slides.length;'
+    +'\nslides[current].classList.remove("active");slides[next].classList.add("active");'
+    +'\nvar ctr=document.getElementById("qvCounter");if(ctr)ctr.textContent=(next+1)+" / "+slides.length;'
+    +'\nqvUpdateDots(next,slides.length);'
+    +'}'
+    +'\nfunction qvGoTo(idx){'
+    +'\nvar slides=document.querySelectorAll(".qv-slide");'
+    +'\nif(!slides.length)return;'
+    +'\nvar current=-1;slides.forEach(function(s,i){if(s.classList.contains("active"))current=i;});'
+    +'\nif(current<0||current===idx)return;'
+    +'\nslides[current].classList.remove("active");slides[idx].classList.add("active");'
+    +'\nvar ctr=document.getElementById("qvCounter");if(ctr)ctr.textContent=(idx+1)+" / "+slides.length;'
+    +'\nqvUpdateDots(idx,slides.length);'
+    +'}'
+    +'\n// Touch swipe support for qv slider'
+    +'\n(function(){'
+    +'\nvar _tx=0,_ty=0,_swiping=false;'
+    +'\nfunction getSlider(){return document.getElementById("qvSlider");}'
+    +'\ndocument.addEventListener("touchstart",function(e){'
+    +'\nvar sl=getSlider();if(!sl||!sl.querySelector(".qv-slide"))return;'
+    +'\nif(!sl.contains(e.target))return;'
+    +'\n_tx=e.touches[0].clientX;_ty=e.touches[0].clientY;_swiping=true;'
+    +'\n},{passive:true});'
+    +'\ndocument.addEventListener("touchend",function(e){'
+    +'\nif(!_swiping)return;_swiping=false;'
+    +'\nvar sl=getSlider();if(!sl||!sl.querySelector(".qv-slide"))return;'
+    +'\nvar dx=e.changedTouches[0].clientX-_tx;'
+    +'\nvar dy=e.changedTouches[0].clientY-_ty;'
+    +'\nif(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>40){'
+    +'\nvar hint=document.getElementById("qvSwipeHint");if(hint)hint.style.opacity="0";'
+    +'\nif(dx<0)qvSlide(1);else qvSlide(-1);'
+    +'\n}'
+    +'\n},{passive:true});'
+    +'\n})();'
     +'\nfunction openCatView(catId){'
     +'\nvar cat=CATS.find(function(c){return c.id===catId;});'
     +'\nvar items=ALLPRODS.filter(function(p){return p.cat===catId;});'
@@ -2174,8 +2660,8 @@ function buildWebsiteHTML(){
     +'\ndocument.body.style.overflow="hidden";'
     +'\nwindow.scrollTo(0,0);'
     +'\n}'
-    +'\nfunction closeCatView(){document.getElementById("catView").classList.remove("open");document.body.style.overflow="";}'
-    +'\nfunction submitEnq(){var name=document.getElementById("ef-name").value.trim(),biz=document.getElementById("ef-biz").value.trim(),ph=document.getElementById("ef-phone").value.trim(),city=document.getElementById("ef-city").value.trim(),cat=document.getElementById("ef-cat").value,msg=document.getElementById("ef-msg").value.trim();if(!name||!ph||!city){alert("Please fill Name, WhatsApp Number and City.");return;}var enqs=[];try{enqs=JSON.parse(localStorage.getItem("tjc2_enqs")||"[]");}catch(e){}enqs.unshift({id:Date.now(),name:name,biz:biz||"—",phone:ph,city:city,interest:cat,msg:msg,date:new Date().toLocaleDateString("en-IN"),done:false,status:"new",src:"Website Form"});localStorage.setItem("tjc2_enqs",JSON.stringify(enqs));try{if(typeof firebase!=="undefined"&&firebase.apps&&firebase.apps.length){firebase.database().ref("tjc/enqs").set(enqs).catch(function(){});}}catch(fbE){}["ef-name","ef-biz","ef-phone","ef-city","ef-msg"].forEach(function(id){var el=document.getElementById(id);if(el)el.value="";});document.getElementById("ef-cat").selectedIndex=0;var s=document.getElementById("enq-success");s.style.display="block";setTimeout(function(){s.style.display="none";},6000);var waMsg=encodeURIComponent("Hi TJC! Enquiry from "+name+(biz?" ("+biz+")":" ")+", "+city+(cat?", interested in "+cat:"")+(msg?". "+msg:""));window.open("https://wa.me/"+PHONE+"?text="+waMsg,"_blank");}'
+    +'\nfunction closeCatView(){document.getElementById("catView").classList.remove("open");document.body.style.overflow="";try{sessionStorage.setItem("tjc_catview","");}catch(e){}}'
+    +'\nfunction submitEnq(){var name=document.getElementById("ef-name").value.trim(),biz=document.getElementById("ef-biz").value.trim(),ph=document.getElementById("ef-phone").value.trim(),city=document.getElementById("ef-city").value.trim(),cat=document.getElementById("ef-cat").value,msg=document.getElementById("ef-msg").value.trim();if(!name||!ph||!city){alert("Please fill Name, WhatsApp Number and City.");return;}var enqs=[];try{enqs=JSON.parse(localStorage.getItem("tjc2_enqs")||"[]");}catch(e){}enqs.unshift({id:Date.now(),name:name,biz:biz||"—",phone:ph,city:city,interest:cat,msg:msg,date:new Date().toLocaleDateString("en-IN"),done:false,status:"new",src:"Website Form"});localStorage.setItem("tjc2_enqs",JSON.stringify(enqs));try{if(typeof firebase!=="undefined"&&firebase.apps&&firebase.apps.length){var _ts=Date.now();firebase.database().ref("tjc/enqs").set(enqs).catch(function(){});firebase.database().ref("tjc/enqs_ts").set(_ts).catch(function(){});}}catch(fbE){}["ef-name","ef-biz","ef-phone","ef-city","ef-msg"].forEach(function(id){var el=document.getElementById(id);if(el)el.value="";});document.getElementById("ef-cat").selectedIndex=0;var s=document.getElementById("enq-success");s.style.display="block";setTimeout(function(){s.style.display="none";},6000);var waMsg=encodeURIComponent("Hi TJC! Enquiry from "+name+(biz?" ("+biz+")":" ")+", "+city+(cat?", interested in "+cat:"")+(msg?". "+msg:""));window.open("https://wa.me/"+PHONE+"?text="+waMsg,"_blank");}'
     +'\n<\/script>'
     +'\n</body>\n</html>';
 }
