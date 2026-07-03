@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TJC Admin Portal</title>
+<title>The Jeans Club Website</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Montserrat:wght@400;500;600;700&display=swap');
 :root{
@@ -2186,17 +2186,27 @@ function buildWebsiteHTML(){
 
   return '<!DOCTYPE html>\n<html lang="en">\n<head>'
     +'\n<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-    +'\n<title>The Jeans Club &mdash; Wholesale Men\'s Fashion | Direct Factory Pricing</title>'
+    +'\n<title>The Jeans Club | Wholesale Men\'s Fashion &amp; Denim Supplier</title>'
+    +'\n<meta name="keywords" content="The Jeans Club, thejeansclub, wholesale jeans, wholesale mens fashion, denim wholesaler, Siwan Bihar jeans wholesaler, mens clothing wholesale India">'
+    +'\n<meta name="robots" content="index, follow">'
+    +'\n<link rel="canonical" href="https://thejeansclub-website.vercel.app/">'
     +'\n<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"><\/script>'
     +'\n<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"><\/script>'
     +'\n<script>try{firebase.initializeApp({apiKey:"AIzaSyCbrej21968UxvwEJRp8T1JUfzgMOJAAOA",databaseURL:"https://the-jeans-club-website-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"the-jeans-club-website",appId:"1:610707824562:web:24f08e30351371c5270eab"});}catch(e){}<\/script>'
-    +'\n<meta name="description" content="'+eH(about.about)+' Browse '+eH(stats.s2v)+' styles across denim, shirts, jackets and more. Enquire on WhatsApp for instant wholesale pricing.">'
+    +'\n<meta name="description" content="The Jeans Club &mdash; '+eH(about.about)+' Browse '+eH(stats.s2v)+' styles across denim, shirts, jackets and more. Enquire on WhatsApp for instant wholesale pricing.">'
     +'\n<meta name="theme-color" content="#000000">'
     +'\n<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 fill=%27%23000%27/%3E%3Ctext x=%2750%27 y=%2762%27 font-size=%2742%27 fill=%27%23fff%27 font-family=%27Helvetica,Arial,sans-serif%27 font-weight=%27700%27 text-anchor=%27middle%27%3ETJC%3C/text%3E%3C/svg%3E">'
-    +'\n<meta property="og:title" content="The Jeans Club &mdash; Wholesale Men\'s Fashion">'
+    +'\n<meta property="og:title" content="The Jeans Club">'
     +'\n<meta property="og:description" content="'+eH(about.about)+'">'
     +'\n<meta property="og:type" content="website">'
+    +'\n<meta property="og:url" content="https://thejeansclub-website.vercel.app/">'
+    +'\n<meta property="og:site_name" content="The Jeans Club">'
     +'\n<meta property="og:image" content="'+eH((cats[0]&&cats[0].photo)||'')+'">' 
+    +'\n<meta name="twitter:card" content="summary_large_image">'
+    +'\n<meta name="twitter:title" content="The Jeans Club">'
+    +'\n<meta name="twitter:description" content="'+eH(about.about)+'">'
+    +'\n<meta name="twitter:image" content="'+eH((cats[0]&&cats[0].photo)||'')+'">'
+    +'\n<script type="application/ld+json">'+JSON.stringify({"@context":"https://schema.org","@type":"ClothingStore","name":"The Jeans Club","description":about.about,"telephone":contact.ph,"address":location.addr?{"@type":"PostalAddress","streetAddress":location.addr}:undefined,"url":"https://thejeansclub-website.vercel.app/","image":(cats[0]&&cats[0].photo)||undefined})+'<\/script>'
     +'\n<style>'
     +'\n*{margin:0;padding:0;box-sizing:border-box}'
     +'\nhtml{font-size:16px;scroll-behavior:smooth}'
@@ -2556,7 +2566,7 @@ function buildWebsiteHTML(){
     +'\nfunction callAiBackend(userMsg){var typingEl=addChatBubble("bot","\u2022\u2022\u2022");return fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:userMsg,history:_chatHistory.slice(-8),business:Object.assign({},BIZ,{categories:CATS,products:ALLPRODS})})}).then(function(r){if(!r.ok)throw new Error("bad status");return r.json();}).then(function(data){typingEl.remove();if(data&&data.reply){_chatHistory.push({role:"user",content:userMsg});_chatHistory.push({role:"assistant",content:data.reply});addChatBubble("bot",data.reply.replace(/</g,"&lt;").replace(/\\n/g,"<br>"));}else{fallbackReply(userMsg);}}).catch(function(){typingEl.remove();fallbackReply(userMsg);});}'
     +'\nfunction sendChatMsg(){var inp=document.getElementById("chatInput");var msg=(inp.value||"").trim();if(!msg)return;addChatBubble("user",msg.replace(/</g,"&lt;"));inp.value="";if(AI_URL){callAiBackend(msg);}else{fallbackReply(msg);}}'
     +'\nvar _logoClickCount=0,_logoClickTimer=null;'
-    +'\nfunction handleLogoTripleClick(){_logoClickCount++;if(_logoClickTimer)clearTimeout(_logoClickTimer);if(_logoClickCount>=3){_logoClickCount=0;clearTimeout(_logoClickTimer);window.parent.openAdminOverlay&&window.parent.openAdminOverlay();return;}_logoClickTimer=setTimeout(function(){_logoClickCount=0;},600);}'
+    +'\nfunction handleLogoTripleClick(){_logoClickCount++;if(_logoClickTimer)clearTimeout(_logoClickTimer);if(_logoClickCount>=3){_logoClickCount=0;clearTimeout(_logoClickTimer);if(window.parent&&window.parent!==window&&window.parent.openAdminOverlay){window.parent.openAdminOverlay();}else{window.location.href="https://thejeansclub-app.vercel.app";}return;}_logoClickTimer=setTimeout(function(){_logoClickCount=0;},600);}'
     +'\n(function(){var slides=document.querySelectorAll(".hero-slide");if(slides.length<2)return;var idx=0;setInterval(function(){slides[idx].classList.remove("active");idx=(idx+1)%slides.length;slides[idx].classList.add("active");},2000);})();'
     +'\nfunction toggleMob(){var m=document.getElementById("mobmenu"),h=document.getElementById("hambtn");m.classList.toggle("open");h.classList.toggle("open");document.body.style.overflow=m.classList.contains("open")?"hidden":"";}'
     +'\nfunction closeMob(){document.getElementById("mobmenu").classList.remove("open");document.getElementById("hambtn").classList.remove("open");document.body.style.overflow="";}'
