@@ -480,6 +480,18 @@ Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me disp
           <button class="savebtn" onclick="chgPass()">💾 Update Password</button>
         </div>
         <div class="ecard">
+          <div class="ecard-title">☁️ Photo Storage (Cloudflare R2 — Free)</div>
+          <p style="font-size:12px;color:rgba(245,237,214,.4);margin-bottom:12px;line-height:1.6">Product photos ko Cloudflare R2 me upload karke sirf URL Firebase me save hoga — isse sync fast aur halka rahega. Worker deploy karne ke steps README me hain. Khali chhodo toh app pehle jaisa (local base64) kaam karega.</p>
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--gold);margin-bottom:10px" id="cfStatusBadge">⚠️ Not configured</div>
+          <div class="fg"><label>Worker URL</label><input id="cfWorkerUrl" class="fi" style="margin:0" placeholder="https://tjc-image-worker.yourname.workers.dev"></div>
+          <div class="fg" style="margin-top:10px"><label>Upload Secret</label><input id="cfSecret" class="fi" type="password" style="margin:0" placeholder="Same secret set via wrangler secret put UPLOAD_SECRET"></div>
+          <div class="fg" style="margin-top:10px"><label>Public Base URL <span style="color:rgba(245,237,214,.35);font-weight:400;text-transform:none">(R2 public/r2.dev URL — used to allow deleting old photos)</span></label><input id="cfPublicBase" class="fi" style="margin:0" placeholder="https://pub-xxxxxxxxxxxx.r2.dev"></div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="savebtn" onclick="saveCfSettings()" style="flex:1">💾 Save</button>
+            <button class="savebtn" onclick="testCfConnection()" style="flex:1;color:#60a5fa;border-color:rgba(96,165,250,.3)">🔌 Test Connection</button>
+          </div>
+        </div>
+        <div class="ecard">
           <div class="ecard-title">🗄️ Data Management</div>
           <div id="backupReminder" style="display:none;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.25);color:#fbbf24;padding:9px 12px;border-radius:4px;font-size:11px;margin-bottom:12px"></div>
           <p style="font-size:12px;color:rgba(245,237,214,.4);margin-bottom:16px;line-height:1.6">Export a full backup of all products, categories, enquiries, content and activity log as a JSON file. Do this weekly so your data is safe even if Firebase/browser storage is cleared.</p>
@@ -539,6 +551,10 @@ Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me disp
           <div class="photo-upload-icon">📷</div>
           <div class="photo-upload-text"><span>Click to upload</span> or drag & drop<br>JPG, PNG, WEBP (Max 5MB each, multiple allowed)</div>
         </div>
+        <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(245,237,214,.55);margin:2px 0 10px;cursor:pointer;font-weight:600;letter-spacing:.3px">
+          <input type="checkbox" id="autoRemoveBg" checked style="width:14px;height:14px;accent-color:var(--gold);cursor:pointer">
+          ✂️ Background automatically hata kar sirf product dikhayein (recommended)
+        </label>
         <div id="photoGallery" class="photo-gallery"></div>
         <div class="or-divider">OR ADD BY URL</div>
         <!-- URL input -->
@@ -657,6 +673,82 @@ function onFbReady(fn){if(FB_READY)fn();else FB_CALLBACKS.push(fn);}
   };
   document.head.appendChild(s1);
 })();
+
+// ══ CLOUDFLARE R2 IMAGE STORAGE (free tier) ══
+// Worker URL + secret key Settings page se save hote hain (localStorage me).
+function getCfCfg(){
+  try{return JSON.parse(localStorage.getItem('tjc_cf_cfg')||'{}');}catch(e){return {};}
+}
+function setCfCfg(cfg){
+  localStorage.setItem('tjc_cf_cfg',JSON.stringify(cfg));
+}
+function cfConfigured(){
+  var c=getCfCfg();
+  return !!(c.workerUrl&&c.secret);
+}
+// Convert a dataURL (base64) to a Blob for uploading
+function dataURLtoBlob(dataURL){
+  var parts=dataURL.split(',');
+  var mime=parts[0].match(/:(.*?);/)[1];
+  var bin=atob(parts[1]);
+  var arr=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+// Upload a dataURL/blob to the Cloudflare Worker → returns public URL via callback(url|null)
+function uploadToCloudflare(dataURL,filename,cb){
+  var cfg=getCfCfg();
+  if(!cfg.workerUrl||!cfg.secret){cb(null,'Cloudflare not configured');return;}
+  try{
+    var blob=dataURLtoBlob(dataURL);
+    var fd=new FormData();
+    fd.append('file',blob,filename||'photo.jpg');
+    fetch(cfg.workerUrl.replace(/\/$/,'')+'/upload',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+cfg.secret},
+      body:fd
+    }).then(function(res){return res.json();})
+      .then(function(data){
+        if(data&&data.url)cb(data.url,null,data.key);
+        else cb(null,(data&&data.error)||'Upload failed');
+      }).catch(function(err){cb(null,'Network error: '+err.message);});
+  }catch(e){cb(null,'Upload error: '+e.message);}
+}
+// Best-effort delete of an image from R2 (fire-and-forget, only for our own worker URLs)
+function deleteFromCloudflare(imgUrl){
+  var cfg=getCfCfg();
+  if(!cfg.workerUrl||!cfg.secret||!imgUrl)return;
+  var base=(cfg.publicBaseUrl||'').replace(/\/$/,'');
+  if(!base||imgUrl.indexOf(base)!==0)return; // not one of ours, skip
+  var key=imgUrl.slice(base.length+1);
+  fetch(cfg.workerUrl.replace(/\/$/,'')+'/delete/'+encodeURIComponent(key),{
+    method:'DELETE',
+    headers:{'Authorization':'Bearer '+cfg.secret}
+  }).catch(function(){});
+}
+function testCfConnection(){
+  var cfg=getCfCfg();
+  if(!cfg.workerUrl){toast('Worker URL daalo pehle','err');return;}
+  fetch(cfg.workerUrl.replace(/\/$/,'')+'/').then(function(r){return r.json();})
+    .then(function(d){toast('✅ Worker reachable: '+(d.status||'OK'),'ok');})
+    .catch(function(e){toast('❌ Worker se connect nahi ho paya: '+e.message,'err');});
+}
+function saveCfSettings(){
+  var workerUrl=document.getElementById('cfWorkerUrl').value.trim();
+  var secret=document.getElementById('cfSecret').value.trim();
+  var publicBaseUrl=document.getElementById('cfPublicBase').value.trim();
+  setCfCfg({workerUrl:workerUrl,secret:secret,publicBaseUrl:publicBaseUrl});
+  toast('Cloudflare settings saved ✅','ok');
+}
+function loadCfSettingsUI(){
+  var cfg=getCfCfg();
+  var w=document.getElementById('cfWorkerUrl'),s=document.getElementById('cfSecret'),b=document.getElementById('cfPublicBase');
+  if(w)w.value=cfg.workerUrl||'';
+  if(s)s.value=cfg.secret||'';
+  if(b)b.value=cfg.publicBaseUrl||'';
+  var badge=document.getElementById('cfStatusBadge');
+  if(badge)badge.textContent=cfConfigured()?'✅ Configured':'⚠️ Not configured (using local storage fallback)';
+}
 
 // ══ INDEXED DB STORE — no 5MB limit, stores GBs of photos ══
 var IDB=null;
@@ -1242,7 +1334,7 @@ function sp(id){
   document.getElementById('tbtitle').textContent=ptitles[id]||id;
   if(id==='dashboard')updateDash();
   if(id==='content')loadContentFields();
-  if(id==='settings')checkBackupReminder();
+  if(id==='settings'){checkBackupReminder();loadCfSettingsUI();}
   if(window.innerWidth<=900)document.getElementById('sb').classList.remove('open');
   return false;
 }
@@ -1284,29 +1376,93 @@ function renderPhotoGallery(){
 }
 
 function removePhoto(i){
+  var removed=currentPhotosData[i];
   currentPhotosData.splice(i,1);
   renderPhotoGallery();
+  if(removed)deleteFromCloudflare(removed);
 }
 
 function handlePhotoFiles(input){
   var files=Array.prototype.slice.call(input.files||[]);
   if(!files.length)return;
   var remaining=files.length;
+  var useCf=cfConfigured();
+  var removeBg=!!(document.getElementById('autoRemoveBg')&&document.getElementById('autoRemoveBg').checked);
+  var ua=document.getElementById('uploadArea');
+  function setStatus(msg){if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML=msg;}}
+  if(removeBg)setStatus('<span style="color:var(--gold)">✂️ Background hata rahe hain...</span>');
+  else if(useCf)setStatus('<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>');
   files.forEach(function(file){
     if(file.size>5*1024*1024){toast(file.name+' too large! Max 5MB','err');remaining--;if(remaining===0)input.value='';return;}
     var reader=new FileReader();
     reader.onload=function(e){
-      compressImage(e.target.result,800,800,0.75,function(compressed){
-        currentPhotosData.push(compressed);
-        renderPhotoGallery();
-        remaining--;
-        if(remaining===0){
-          document.getElementById('uploadArea').querySelector('.photo-upload-text').innerHTML='<span style="color:#4ade80">✅ '+currentPhotosData.length+' photo(s) added!</span><br>Click to add more';
-          input.value='';
-        }
-      });
+      function afterBg(sourceDataURL,hasAlpha){
+        compressImage(sourceDataURL,1800,1800,0.92,hasAlpha,function(compressed){
+          if(useCf){
+            if(ua)setStatus('<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>');
+            uploadToCloudflare(compressed,fixFilenameExt(compressed,file.name),function(url,err){
+              if(url){
+                currentPhotosData.push(url);
+              }else{
+                toast('Upload failed ('+file.name+'): '+err+' — saved locally instead','err');
+                currentPhotosData.push(compressed); // fallback so photo isn't lost
+              }
+              renderPhotoGallery();
+              remaining--;
+              if(remaining===0){
+                setStatus('<span style="color:#4ade80">✅ '+currentPhotosData.length+' photo(s) added!</span><br>Click to add more');
+                input.value='';
+              }
+            });
+          }else{
+            currentPhotosData.push(compressed);
+            renderPhotoGallery();
+            remaining--;
+            if(remaining===0){
+              setStatus('<span style="color:#4ade80">✅ '+currentPhotosData.length+' photo(s) added!</span><br>Click to add more');
+              input.value='';
+            }
+          }
+        });
+      }
+      if(removeBg){
+        removeImageBackground(e.target.result,function(resultDataURL,bgErr){
+          if(bgErr)toast((file.name)+': background remove nahi ho paya, original photo use ho rahi hai','err');
+          afterBg(resultDataURL,!bgErr);
+        });
+      }else{
+        afterBg(e.target.result,false);
+      }
     };
     reader.readAsDataURL(file);
+  });
+}
+
+// ══ AUTOMATIC BACKGROUND REMOVAL (client-side, no server needed) ══
+var _bgRemovalLibPromise=null;
+function loadBgRemovalLib(){
+  if(!_bgRemovalLibPromise){
+    _bgRemovalLibPromise=import('https://esm.sh/@imgly/background-removal@1.5.7').catch(function(e){
+      _bgRemovalLibPromise=null;
+      throw e;
+    });
+  }
+  return _bgRemovalLibPromise;
+}
+// Converts a dataURL to a transparent-background dataURL (PNG-quality via canvas), cb(dataURL, errMessageOrNull)
+function removeImageBackground(dataURL,cb){
+  loadBgRemovalLib().then(function(mod){
+    // dataURL -> Blob for the library input
+    return fetch(dataURL).then(function(r){return r.blob();}).then(function(blob){
+      return mod.removeBackground(blob);
+    });
+  }).then(function(resultBlob){
+    var fr=new FileReader();
+    fr.onload=function(e){cb(e.target.result,null);};
+    fr.onerror=function(){cb(dataURL,'read failed');};
+    fr.readAsDataURL(resultBlob);
+  }).catch(function(err){
+    cb(dataURL,(err&&err.message)||'background removal failed');
   });
 }
 
@@ -1319,22 +1475,52 @@ function addPhotoUrl(){
   renderPhotoGallery();
 }
 
-function compressImage(dataURL,maxW,maxH,quality,cb){
+var _WEBP_OK=(function(){
+  try{var c=document.createElement('canvas');c.width=c.height=1;return c.toDataURL('image/webp').indexOf('data:image/webp')===0;}catch(e){return false;}
+})();
+function fixFilenameExt(dataURL,name){
+  var ext=dataURL.indexOf('data:image/webp')===0?'.webp':'.jpg';
+  return (name||'photo').replace(/\.[a-zA-Z0-9]+$/,'')+ext;
+}
+function compressImage(dataURL,maxW,maxH,quality,preserveAlpha,cb){
+  // Back-compat: allow old 4-arg calls (quality,cb) without preserveAlpha
+  if(typeof preserveAlpha==='function'){cb=preserveAlpha;preserveAlpha=false;}
   var img=new Image();
   img.onload=function(){
     var w=img.width,h=img.height;
-    var hardMaxW=Math.min(maxW,500),hardMaxH=Math.min(maxH,500);
-    var scale=Math.min(1,hardMaxW/w,hardMaxH/h);
-    var nw=Math.round(w*scale),nh=Math.round(h*scale);
+    var scale=Math.min(1,maxW/w,maxH/h);
+    var nw=Math.max(1,Math.round(w*scale)),nh=Math.max(1,Math.round(h*scale));
     var canvas=document.createElement('canvas');
     canvas.width=nw;canvas.height=nh;
-    canvas.getContext('2d').drawImage(img,0,0,nw,nh);
-    var result=canvas.toDataURL('image/jpeg',0.55);
-    if(result.length>180000){
+    var ctx=canvas.getContext('2d');
+    ctx.imageSmoothingEnabled=true;
+    if('imageSmoothingQuality' in ctx)ctx.imageSmoothingQuality='high';
+    ctx.drawImage(img,0,0,nw,nh);
+    // JPEG can't hold transparency (fills black), so if the photo has a removed/transparent
+    // background we must save as WEBP (alpha-capable) or fall back to PNG (lossless, larger).
+    var fmt=preserveAlpha?(_WEBP_OK?'image/webp':'image/png'):(_WEBP_OK?'image/webp':'image/jpeg');
+    var q=quality;
+    var result=fmt==='image/png'?canvas.toDataURL(fmt):canvas.toDataURL(fmt,q);
+    var TARGET=800000; // byte safety cap ~800KB per photo — kept high so product detail/sharpness isn't lost
+    var bytes=Math.round(result.length*0.75);
+    var tries=0;
+    // Never drop quality below 0.75 — earlier low floor (0.4) was the main cause of blurry/faded photos
+    while(fmt!=='image/png'&&bytes>TARGET&&q>0.75&&tries<4){
+      q-=0.05;
+      result=canvas.toDataURL(fmt,q);
+      bytes=Math.round(result.length*0.75);
+      tries++;
+    }
+    // Only downscale (never re-encode at ugly low quality) if still oversized, and keep it mild
+    if(fmt!=='image/png'&&bytes>TARGET){
+      var sw=Math.round(nw*0.85),sh=Math.round(nh*0.85);
       var c2=document.createElement('canvas');
-      c2.width=Math.round(nw*0.65);c2.height=Math.round(nh*0.65);
-      c2.getContext('2d').drawImage(img,0,0,c2.width,c2.height);
-      result=c2.toDataURL('image/jpeg',0.45);
+      c2.width=sw;c2.height=sh;
+      var ctx2=c2.getContext('2d');
+      ctx2.imageSmoothingEnabled=true;
+      if('imageSmoothingQuality' in ctx2)ctx2.imageSmoothingQuality='high';
+      ctx2.drawImage(canvas,0,0,sw,sh);
+      result=c2.toDataURL(fmt,Math.max(q,0.8));
     }
     cb(result);
   };
@@ -1345,15 +1531,28 @@ function handleCatPhoto(input){
   var file=input.files[0];
   if(!file)return;
   if(file.size>5*1024*1024){toast('File too large! Max 5MB','err');return}
+  var useCf=cfConfigured();
+  var ua=document.getElementById('catUploadArea');
   var reader=new FileReader();
   reader.onload=function(e){
-    compressImage(e.target.result,600,600,0.7,function(compressed){
-      currentCatPhotoData=compressed;
-      var prev=document.getElementById('catPhotoPreview');
-      prev.src=compressed;
-      prev.style.display='block';
-      document.getElementById('cphoto').value='';
-      document.getElementById('catUploadArea').querySelector('.photo-upload-text').innerHTML='<span style="color:#4ade80">✅ Photo uploaded!</span><br>Click to change';
+    compressImage(e.target.result,700,700,0.85,false,function(compressed){
+      function applyResult(url){
+        currentCatPhotoData=url;
+        var prev=document.getElementById('catPhotoPreview');
+        prev.src=url;
+        prev.style.display='block';
+        document.getElementById('cphoto').value='';
+        if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:#4ade80">✅ Photo uploaded!</span><br>Click to change';}
+      }
+      if(useCf){
+        if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>';}
+        uploadToCloudflare(compressed,fixFilenameExt(compressed,file.name),function(url,err){
+          if(url)applyResult(url);
+          else{toast('Upload failed: '+err+' — saved locally instead','err');applyResult(compressed);}
+        });
+      }else{
+        applyResult(compressed);
+      }
     });
   };
   reader.readAsDataURL(file);
@@ -1718,7 +1917,11 @@ function delProd(id){
   var prods=getProds();var p=prods.find(function(x){return x.id===id});
   setProds(prods.filter(function(p){return p.id!==id}));
   renderProds();updateDash();toast('Product deleted','ok');
-  if(p)logActivity('Deleted product "'+p.name+'"');
+  if(p){
+    logActivity('Deleted product "'+p.name+'"');
+    if(p.photos&&p.photos.length)p.photos.forEach(deleteFromCloudflare);
+    else if(p.photo)deleteFromCloudflare(p.photo);
+  }
 }
 
 function toggleFeatured(id){
@@ -1900,7 +2103,7 @@ function delCat(id){
   var cats=getCats();var c=cats.find(function(x){return x.id===id});
   setCats(cats.filter(function(c){return c.id!==id}));
   refreshCatDropdowns();renderCats();updateDash();toast('Category deleted','ok');
-  if(c)logActivity('Deleted category "'+c.name+'"');
+  if(c){logActivity('Deleted category "'+c.name+'"');if(c.photo)deleteFromCloudflare(c.photo);}
 }
 
 // ══ ENQUIRIES ══
@@ -2187,7 +2390,7 @@ function buildWebsiteHTML(){
   var embeddedCats=JSON.stringify(cats.map(function(c){return {id:c.id,name:c.name};}));
 
   return '<!DOCTYPE html>\n<html lang="en">\n<head>'
-    +'\n<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    +'\n<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">'
     +'\n<title>The Jeans Club | Wholesale Men\'s Fashion &amp; Denim Supplier</title>'
     +'\n<meta name="keywords" content="The Jeans Club, thejeansclub, wholesale jeans, wholesale mens fashion, denim wholesaler, Siwan Bihar jeans wholesaler, mens clothing wholesale India">'
     +'\n<meta name="robots" content="index, follow">'
@@ -2279,7 +2482,7 @@ function buildWebsiteHTML(){
     +'\n.cat-info{padding:12px 4px 20px}'
     +'\n.cat-name{font-size:12px;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}'
     +'\n.cat-sub{font-size:11px;color:#888}'
-    +'\n.prods-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}'
+    +'\n.prods-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}'
     +'\n.prod-item{display:block;cursor:pointer;transition:transform .3s ease,box-shadow .3s ease}'
     +'\n.prod-item:hover{transform:scale(1.03);box-shadow:0 12px 32px rgba(0,0,0,.12);position:relative;z-index:1}'
     +'\n.prod-img{position:relative;aspect-ratio:3/4;overflow:hidden;background:#f5f5f5}'
@@ -2354,6 +2557,7 @@ function buildWebsiteHTML(){
     +'\n.cart-btn{position:fixed;bottom:170px;right:20px;z-index:9999;background:#000;color:#fff;width:42px;height:42px;border-radius:50%;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:transform .3s;border:none;cursor:pointer}'
     +'\n.cart-btn:hover{transform:scale(1.06)}'
     +'\n.cart-badge{position:absolute;top:-4px;right:-4px;background:#CC2936;color:#fff;font-size:10px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 4px;box-shadow:0 0 0 2px #fff}'
+    +'\n.mob-cart-badge{background:#CC2936;color:#fff;font-size:10px;font-weight:700;min-width:17px;height:17px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-left:6px;vertical-align:middle}'
     +'\n.cart-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;width:100%;height:100%;background:#fff;display:none;flex-direction:column;overflow:hidden}'
     +'\n.cart-panel.open{display:flex}'
     +'\n.cart-head{background:#0d1a2e;color:#fff;padding:16px 18px;padding-top:calc(16px + env(safe-area-inset-top));display:flex;justify-content:space-between;align-items:center;flex-shrink:0}'
@@ -2387,7 +2591,8 @@ function buildWebsiteHTML(){
     +'\n@media(max-width:900px){'
     +'\n.nav-right .nav-link,.nav-wa{display:none}'
     +'\n.ham{display:flex}'
-    +'\n.cats-grid,.prods-grid{grid-template-columns:repeat(2,1fr)}'
+    +'\n.cats-grid{grid-template-columns:repeat(2,1fr)}'
+    +'\n.prods-grid{grid-template-columns:repeat(2,1fr);gap:12px}'
     +'\n.enq-inner{grid-template-columns:1fr;gap:48px}'
     +'\n.footer-inner{grid-template-columns:1fr;gap:28px}'
     +'\n.stats-bar{grid-template-columns:1fr}'
@@ -2397,7 +2602,9 @@ function buildWebsiteHTML(){
     +'\n@media(max-width:480px){'
     +'\n.hero{padding:0 16px 48px}'
     +'\n.hero-actions{flex-direction:column}'
-    +'\n.cats-grid,.prods-grid{grid-template-columns:repeat(2,1fr);gap:1px}'
+    +'\n.cats-grid{grid-template-columns:repeat(2,1fr);gap:8px}'
+    +'\n.prods-grid{grid-template-columns:1fr;gap:20px}'
+    +'\n.prod-img{aspect-ratio:1/1}'
     +'\n.section{padding:56px 16px}'
     +'}'
     +'\n@keyframes fadeInUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}'
@@ -2411,19 +2618,22 @@ function buildWebsiteHTML(){
     +'\n.qv-box{background:#fff;width:100%;height:100%;max-width:none;max-height:none;overflow-y:auto;border-radius:0;display:grid;grid-template-columns:1fr 1fr;position:relative;animation:qvRise .4s cubic-bezier(.2,.8,.3,1)}'
     +'\n@keyframes qvRise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}'
     +'\n@media(max-width:640px){.qv-box{grid-template-columns:1fr;height:auto}}'
-    +'\n.qv-close{position:absolute;top:18px;right:18px;background:rgba(10,14,26,.55);border:1px solid rgba(201,162,39,.4);font-size:15px;line-height:1;cursor:pointer;z-index:10;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#F5EDD6;transition:all .25s}'
+    +'\n.qv-close{position:absolute;top:18px;right:18px;background:transparent;border:none;font-size:17px;line-height:1;cursor:pointer;z-index:10;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#0A0E1A;text-shadow:0 1px 4px rgba(255,255,255,.9),0 0 8px rgba(255,255,255,.6);transition:all .25s}'
     +'\n.qv-close:hover{background:#C9A227;color:#0A0E1A;border-color:#C9A227;transform:rotate(90deg)}'
-    +'\n.qv-slider{position:relative;background:linear-gradient(160deg,#faf9f5,#efeee6);overflow:hidden;min-height:100vh}'
-    +'\n@media(max-width:640px){.qv-slider{min-height:64vw;aspect-ratio:4/3}}'
-    +'\n.qv-slide{position:absolute;inset:0;opacity:0;transition:opacity .4s ease}'
-    +'\n.qv-slide.active{opacity:1}'
-    +'\n.qv-slide img{width:100%;height:100%;object-fit:contain;display:block;padding:30px}'
+    +'\n.qv-slider{position:relative;background:linear-gradient(160deg,#faf9f5,#efeee6);overflow:hidden;min-height:100vh;touch-action:none}'
+    +'\n@media(max-width:640px){.qv-slider{min-height:60vh;height:60vh;aspect-ratio:auto}.qv-slide img{padding:10px}}'
+    +'\n.qv-slide{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .4s ease}'
+    +'\n.qv-slide.active{opacity:1;pointer-events:auto}'
+    +'\n.qv-slide img{width:100%;height:100%;object-fit:contain;display:block;padding:30px;transition:transform .12s ease-out;will-change:transform;touch-action:none;cursor:zoom-in}'
+    +'\n.qv-zoom-hint{position:absolute;top:16px;left:16px;background:rgba(10,14,26,.72);color:#F5EDD6;font-size:10.5px;letter-spacing:.5px;padding:7px 13px;border-radius:20px;pointer-events:none;opacity:1;transition:opacity .5s;z-index:5;white-space:nowrap;display:flex;align-items:center;gap:5px}'
+    +'\n@media(max-width:640px){.qv-zoom-hint{font-size:9.5px;padding:6px 11px;top:auto;bottom:16px;left:16px}}'
+    +'\n.qv-slide.zoomed img{cursor:zoom-out}'
     +'\n.qv-no-img{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-family:\'Playfair Display\',serif;font-size:96px;font-weight:700;color:#e6e3d8;background:#f5f4ee}'
-    +'\n.qv-arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(10,14,26,.55);border:1px solid rgba(201,162,39,.35);width:38px;height:38px;cursor:pointer;font-size:17px;display:flex;align-items:center;justify-content:center;z-index:2;transition:all .25s;border-radius:50%;color:#F5EDD6}'
+    +'\n.qv-arrow{position:absolute;top:50%;transform:translateY(-50%);background:transparent;border:none;width:38px;height:38px;cursor:pointer;font-size:22px;display:flex;align-items:center;justify-content:center;z-index:2;transition:all .25s;border-radius:50%;color:#0A0E1A;text-shadow:0 1px 4px rgba(255,255,255,.9),0 0 8px rgba(255,255,255,.6)}'
     +'\n.qv-arrow:hover{background:#C9A227;color:#0A0E1A;border-color:#C9A227}'
     +'\n.qv-arr-l{left:16px}'
     +'\n.qv-arr-r{right:16px}'
-    +'\n.qv-counter{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(10,14,26,.72);color:#C9A227;font-family:\'Playfair Display\',serif;font-size:12px;letter-spacing:1px;padding:5px 15px;border-radius:20px;border:1px solid rgba(201,162,39,.3)}'
+    +'\n.qv-counter{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:transparent;color:#0A0E1A;font-family:\'Playfair Display\',serif;font-size:13px;font-weight:700;letter-spacing:1px;padding:5px 15px;border-radius:20px;border:none;text-shadow:0 1px 4px rgba(255,255,255,.9),0 0 8px rgba(255,255,255,.6)}'
     +'\n.qv-dots{position:absolute;bottom:54px;left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:3}'
     +'\n.qv-dot{width:6px;height:6px;border-radius:50%;background:rgba(10,14,26,.25);border:none;cursor:pointer;padding:0;transition:all .25s}'
     +'\n.qv-dot.active{background:#C9A227;transform:scale(1.4)}'
@@ -2480,6 +2690,7 @@ function buildWebsiteHTML(){
     +'\n<div class="mob-menu" id="mobmenu">'
     +'\n<a class="mob-item" href="javascript:void(0)" onclick="smoothTo(\'catalogue\');closeMob();return false;">Catalogue</a>'
     +'\n<a class="mob-item" href="javascript:void(0)" onclick="smoothTo(\'contact\');closeMob();return false;">Contact</a>'
+    +'\n<a class="mob-item" href="javascript:void(0)" onclick="closeMob();toggleCart();return false;">My Cart <span class="mob-cart-badge" id="mobCartBadge">0</span></a>'
     +'\n<a class="mob-wa" href="https://wa.me/'+phone+'" target="_blank">WhatsApp Us</a>'
     +'\n</div>'
 
@@ -2593,7 +2804,7 @@ function buildWebsiteHTML(){
 
     +(mapsLink?'\n<a class="shop-btn" href="'+eH(mapsLink)+'" target="_blank" title="Shop Location">\ud83d\udccd</a>':'')
 
-    +'\n<button class="cart-btn" onclick="toggleCart()" title="View Cart">\ud83d\uded2<span class="cart-badge" id="cartBadge">0</span></button>'
+    +''
     +'\n<div class="cart-panel" id="cartPanel">'
     +'\n<div class="cart-head"><div class="cart-head-title">Your Cart</div><button class="cart-close" onclick="toggleCart()">&times;</button></div>'
     +'\n<div class="cart-body" id="cartBody"></div>'
@@ -2634,9 +2845,10 @@ function buildWebsiteHTML(){
     +'\n(function _restoreState(){try{var sy=parseInt(sessionStorage.getItem("tjc_scroll")||"0",10);var cvName=sessionStorage.getItem("tjc_catview")||"";if(sy>0){setTimeout(function(){window.scrollTo(0,sy);},80);}if(cvName){var cats=typeof CATS!=="undefined"?CATS:[];var cat=cats.find(function(c){return c.name===cvName;});if(cat){setTimeout(function(){openCatView(cat.id);},120);}}}catch(e){}})();'
     +'\nvar CART_KEY="tjc2_cart";'
     +'\nvar _cartMem=null;'
-    +'\nfunction getCart(){if(_cartMem!==null)return _cartMem;try{_cartMem=JSON.parse(localStorage.getItem(CART_KEY)||"[]");}catch(e){_cartMem=[];}return _cartMem;}'
-    +'\nfunction saveCart(c){_cartMem=c;var ok=true;try{localStorage.setItem(CART_KEY,JSON.stringify(c));}catch(e){console.warn("TJC cart: localStorage unavailable, using in-memory cart for this session",e);ok=false;}updateCartBadge();return ok;}'
-    +'\nfunction updateCartBadge(){var c=getCart();var count=c.reduce(function(s,i){return s+i.qty;},0);var b=document.getElementById("cartBadge");if(!b)return;b.textContent=count;b.style.display=count>0?"flex":"none";}'
+    +'\nfunction _topStore(){try{if(window.top&&window.top!==window&&window.top.localStorage){window.top.localStorage.setItem("__tjc_t__","1");window.top.localStorage.removeItem("__tjc_t__");return window.top.localStorage;}}catch(e){}return null;}'
+    +'\nfunction getCart(){if(_cartMem!==null)return _cartMem;var raw=null;var ts=_topStore();try{if(ts)raw=ts.getItem(CART_KEY);}catch(e){}if(raw===null){try{raw=localStorage.getItem(CART_KEY);}catch(e){}}try{_cartMem=JSON.parse(raw||"[]");}catch(e){_cartMem=[];}return _cartMem;}'
+    +'\nfunction saveCart(c){_cartMem=c;var ok=false;var json=JSON.stringify(c);var ts=_topStore();try{if(ts){ts.setItem(CART_KEY,json);ok=true;}}catch(e){}try{localStorage.setItem(CART_KEY,json);ok=true;}catch(e){console.warn("TJC cart: localStorage unavailable, using in-memory cart for this session",e);}updateCartBadge();return ok;}'
+    +'\nfunction updateCartBadge(){var c=getCart();var count=c.reduce(function(s,i){return s+i.qty;},0);var b=document.getElementById("cartBadge");if(b){b.textContent=count;b.style.display=count>0?"flex":"none";}var mb=document.getElementById("mobCartBadge");if(mb)mb.textContent=count;}'
     +'\nfunction showCartToast(name){var t=document.createElement("div");t.className="cart-toast";t.textContent="\\u2713 "+name+" added to cart";document.body.appendChild(t);setTimeout(function(){t.classList.add("show");},10);setTimeout(function(){t.classList.remove("show");setTimeout(function(){t.remove();},300);},1800);}'
     +'\nfunction addToCart(idx,qty){qty=qty||1;var p=ALLPRODS[idx];if(!p){console.warn("TJC cart: no product at index",idx);return;}if(p.stock==="outofstock"){console.warn("TJC cart: product out of stock",p.name);return;}var cart=getCart();var existing=cart.find(function(i){return i.idx===idx;});if(existing){existing.qty+=qty;}else{cart.push({idx:idx,name:p.name,sku:p.sku||"",priceLabel:p.priceLabel||"",photo:p.photo||"",qty:qty});}saveCart(cart);showCartToast(p.name);var cp=document.getElementById("cartPanel");if(cp&&cp.classList.contains("open"))renderCartPanel();}'
     +'\nfunction qvChangeQty(delta){var el=document.getElementById("qvQtyInput");if(!el)return;var v=(parseInt(el.value,10)||1)+delta;if(v<1)v=1;el.value=v;}'
@@ -2687,14 +2899,17 @@ function buildWebsiteHTML(){
     +'\nvar dotsHtml=allPhotos.length>1?\'<div class="qv-dots" id="qvDots">\'+allPhotos.map(function(_,di){return \'<button class="qv-dot\'+(di===0?" active":"")+\'" onclick="qvGoTo(\'+di+\')"></button>\';}).join("")+\'</div>\':"";'
     +'\nvar swipeHint=allPhotos.length>1?\'<div class="qv-swipe-hint" id="qvSwipeHint">👆 Swipe to see more photos</div>\':"";'
     +'\nvar arrowsHtml=allPhotos.length>1?\'<button class="qv-arrow qv-arr-l" onclick="qvSlide(-1)">&#8249;</button><button class="qv-arrow qv-arr-r" onclick="qvSlide(1)">&#8250;</button><div class="qv-counter" id="qvCounter">1 / \'+allPhotos.length+\'</div>\':"";'
-    +'\nsliderEl.innerHTML=slidesHtml+arrowsHtml+dotsHtml+swipeHint;'
+    +'\nvar zoomHint=\'<div class="qv-zoom-hint" id="qvZoomHint">🔍 Hover to zoom · Pinch or double-tap on mobile</div>\';'
+    +'\nsliderEl.innerHTML=slidesHtml+arrowsHtml+dotsHtml+swipeHint+zoomHint;'
     +'\nif(allPhotos.length>1){setTimeout(function(){var h=document.getElementById("qvSwipeHint");if(h)h.style.opacity="0";},2500);}'
+    +'\nsetTimeout(function(){var zh=document.getElementById("qvZoomHint");if(zh)zh.style.opacity="0";},3500);'
+    +'\nattachQvZoom();'
     +'}'
     +'\nvar oos=p.stock==="outofstock";'
     +'\nvar stockBadge=oos?\'<span class="qv-stock-out">Out of Stock</span>\':\'<span class="qv-stock-in">&#10003; In Stock</span>\';'
     +'\nvar waMsg=encodeURIComponent(\'Hi TJC! Enquiry about "\'+p.name+\'" SKU:\'+(p.sku||"N/A")+(p.priceLabel?\' (Price: \'+p.priceLabel+\')\':"")+\'. Please share details.\');'
     +'\nvar waBtnHtml=oos?"":\'<a class="qv-wa-btn" href="https://wa.me/\'+PHONE+\'?text=\'+waMsg+\'" target="_blank"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>Enquire on WhatsApp</a>\';'
-    +'\nvar addCartBtnHtml=oos?"":\'<button class="qv-add-cart-btn" onclick="addToCartFromQv(\'+idx+\')">\\ud83d\\uded2 Add to Cart</button>\';'
+    +'\nvar addCartBtnHtml=oos?"":\'<button class="qv-add-cart-btn" onclick="addToCartFromQv(\'+idx+\')">Add to Cart</button>\';'
     +'\nvar qtyStepperHtml=oos?"":\'<div class="qv-qty-row"><span class="qv-qty-label">Qty</span><div class="qv-qty-stepper"><button onclick="qvChangeQty(-1)">&minus;</button><input type="text" id="qvQtyInput" value="1" readonly><button onclick="qvChangeQty(1)">+</button></div></div>\';'
     +'\nvar catObj=(typeof CATS!=="undefined"?CATS:[]).find(function(c){return c.id===p.cat;});'
     +'\nvar crumbHtml=\'<div class="qv-crumb">\'+(catObj?(catObj.name||"")+\' <span>&rsaquo;</span> \':\'\')+(p.name||"")+\'</div>\';'
@@ -2720,11 +2935,19 @@ function buildWebsiteHTML(){
     +'\nvar dots=document.querySelectorAll(".qv-dot");'
     +'\ndots.forEach(function(d,i){d.classList.toggle("active",i===next);});'
     +'}'
+    +'\nfunction qvResetSlideZoom(slide){'
+    +'\nif(!slide)return;slide.classList.remove("zoomed");'
+    +'\nvar img=slide.querySelector("img");if(!img)return;'
+    +'\nimg.style.transform="scale(1) translate(0px,0px)";img.style.transformOrigin="50% 50%";'
+    +'\nif(img._qvState){img._qvState.scale=1;img._qvState.panX=0;img._qvState.panY=0;}'
+    +'}'
+    +'\nfunction qvAnyZoomed(){return !!document.querySelector(".qv-slide.zoomed");}'
     +'\nfunction qvSlide(dir){'
     +'\nvar slides=document.querySelectorAll(".qv-slide");'
     +'\nif(!slides.length)return;'
     +'\nvar current=-1;slides.forEach(function(s,i){if(s.classList.contains("active"))current=i;});'
     +'\nvar next=(current+dir+slides.length)%slides.length;'
+    +'\nqvResetSlideZoom(slides[current]);'
     +'\nslides[current].classList.remove("active");slides[next].classList.add("active");'
     +'\nvar ctr=document.getElementById("qvCounter");if(ctr)ctr.textContent=(next+1)+" / "+slides.length;'
     +'\nqvUpdateDots(next,slides.length);'
@@ -2734,9 +2957,61 @@ function buildWebsiteHTML(){
     +'\nif(!slides.length)return;'
     +'\nvar current=-1;slides.forEach(function(s,i){if(s.classList.contains("active"))current=i;});'
     +'\nif(current<0||current===idx)return;'
+    +'\nqvResetSlideZoom(slides[current]);'
     +'\nslides[current].classList.remove("active");slides[idx].classList.add("active");'
     +'\nvar ctr=document.getElementById("qvCounter");if(ctr)ctr.textContent=(idx+1)+" / "+slides.length;'
     +'\nqvUpdateDots(idx,slides.length);'
+    +'}'
+    +'\nfunction attachQvZoom(){'
+    +'\nvar slides=document.querySelectorAll("#qvSlider .qv-slide");'
+    +'\nslides.forEach(function(slide){'
+    +'\nvar img=slide.querySelector("img");if(!img||img._qvBound)return;img._qvBound=true;'
+    +'\nvar st={scale:1,panX:0,panY:0};img._qvState=st;'
+    +'\nvar startDist=0,startScale=1,dragging=false,lastX=0,lastY=0,lastTap=0;'
+    +'\nfunction isCoarse(){return window.matchMedia&&window.matchMedia("(pointer:coarse)").matches;}'
+    +'\nfunction apply(){img.style.transform="scale("+st.scale+") translate("+st.panX+"px,"+st.panY+"px)";}'
+    +'\nfunction clampPan(){var r=(st.scale-1)*140;st.panX=Math.max(-r,Math.min(r,st.panX));st.panY=Math.max(-r,Math.min(r,st.panY));}'
+    +'\nimg.addEventListener("mousemove",function(e){'
+    +'\nif(isCoarse())return;'
+    +'\nvar rect=img.getBoundingClientRect();'
+    +'\nvar x=(e.clientX-rect.left)/rect.width*100,y=(e.clientY-rect.top)/rect.height*100;'
+    +'\nimg.style.transformOrigin=x+"% "+y+"%";img.style.transform="scale(2.2)";'
+    +'\n});'
+    +'\nimg.addEventListener("mouseleave",function(){if(isCoarse())return;img.style.transform="scale(1)";});'
+    +'\nimg.addEventListener("touchend",function(e){'
+    +'\nvar now=Date.now();'
+    +'\nif(now-lastTap<300){'
+    +'\ne.preventDefault();'
+    +'\nif(st.scale===1){'
+    +'\nvar t=e.changedTouches[0],rect=img.getBoundingClientRect();'
+    +'\nimg.style.transformOrigin=((t.clientX-rect.left)/rect.width*100)+"% "+((t.clientY-rect.top)/rect.height*100)+"%";'
+    +'\nst.scale=2.4;slide.classList.add("zoomed");'
+    +'\n}else{st.scale=1;st.panX=0;st.panY=0;slide.classList.remove("zoomed");img.style.transformOrigin="50% 50%";}'
+    +'\napply();'
+    +'\n}'
+    +'\nlastTap=now;'
+    +'\n});'
+    +'\nslide.addEventListener("touchmove",function(e){'
+    +'\nif(e.touches.length===2){'
+    +'\ne.preventDefault();'
+    +'\nvar dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;'
+    +'\nvar dist=Math.sqrt(dx*dx+dy*dy);'
+    +'\nif(startDist===0){startDist=dist;startScale=st.scale;}'
+    +'\nst.scale=Math.min(4,Math.max(1,startScale*(dist/startDist)));'
+    +'\nslide.classList.toggle("zoomed",st.scale>1.05);'
+    +'\napply();'
+    +'\n}else if(e.touches.length===1&&st.scale>1){'
+    +'\ne.preventDefault();'
+    +'\nvar t=e.touches[0];'
+    +'\nif(dragging){st.panX+=(t.clientX-lastX)/st.scale;st.panY+=(t.clientY-lastY)/st.scale;clampPan();apply();}'
+    +'\ndragging=true;lastX=t.clientX;lastY=t.clientY;'
+    +'\n}'
+    +'\n},{passive:false});'
+    +'\nslide.addEventListener("touchend",function(){'
+    +'\nstartDist=0;dragging=false;'
+    +'\nif(st.scale<=1.05){st.scale=1;st.panX=0;st.panY=0;slide.classList.remove("zoomed");apply();}'
+    +'\n});'
+    +'\n});'
     +'}'
     +'\n// Touch swipe support for qv slider'
     +'\n(function(){'
@@ -2745,10 +3020,12 @@ function buildWebsiteHTML(){
     +'\ndocument.addEventListener("touchstart",function(e){'
     +'\nvar sl=getSlider();if(!sl||!sl.querySelector(".qv-slide"))return;'
     +'\nif(!sl.contains(e.target))return;'
+    +'\nif(qvAnyZoomed())return;'
     +'\n_tx=e.touches[0].clientX;_ty=e.touches[0].clientY;_swiping=true;'
     +'\n},{passive:true});'
     +'\ndocument.addEventListener("touchend",function(e){'
     +'\nif(!_swiping)return;_swiping=false;'
+    +'\nif(qvAnyZoomed())return;'
     +'\nvar sl=getSlider();if(!sl||!sl.querySelector(".qv-slide"))return;'
     +'\nvar dx=e.changedTouches[0].clientX-_tx;'
     +'\nvar dy=e.changedTouches[0].clientY-_ty;'
