@@ -437,6 +437,7 @@ tr:hover td{background:rgba(201,162,39,.03)}
           <div class="frow"><div class="fg"><label>Stat 1 Value</label><input id="s1v" value="15K+"></div><div class="fg"><label>Stat 1 Label</label><input id="s1l" value="Active Retailers"></div></div>
           <div class="frow"><div class="fg"><label>Stat 2 Value</label><input id="s2v" value="500+"></div><div class="fg"><label>Stat 2 Label</label><input id="s2l" value="SKUs Available"></div></div>
           <div class="frow"><div class="fg"><label>Stat 3 Value</label><input id="s3v" value="48h"></div><div class="fg"><label>Stat 3 Label</label><input id="s3l" value="Dispatch SLA"></div></div>
+          <div class="frow"><div class="fg"><label>Google Rating (e.g. 4.8)</label><input id="rtVal" value="4.8"></div><div class="fg"><label>Reviews Count Label</label><input id="rtLabel" value="350+ Google Reviews"></div></div>
           <button class="savebtn" onclick="saveC('stats')">💾 Save</button>
         </div>
         <div class="ecard">
@@ -451,6 +452,34 @@ tr:hover td{background:rgba(201,162,39,.03)}
           <div class="fg"><label>Google Maps Link (optional)</label><input id="locurl" placeholder="Paste Google Maps share link (maps.app.goo.gl/...)"></div>
           <p style="font-size:11px;color:rgba(245,237,214,.35);margin:-6px 0 12px;line-height:1.5">Open Google Maps → search your shop → tap Share → copy link, paste here. If left blank, the address text above will be used to open Maps.</p>
           <button class="savebtn" onclick="saveC('location')">💾 Save</button>
+        </div>
+        <div class="ecard" style="grid-column:1/-1">
+          <div class="ecard-title">💬 Testimonials</div>
+          <p style="font-size:11px;color:rgba(245,237,214,.4);margin-bottom:10px;line-height:1.6">Neeche form bharke "Add Testimonial" dabayein — turant save ho jayega aur website par sabse upar "Latest" badge ke saath dikhega. Kisi purane testimonial ko hatane ke liye uske saamne ✕ dabayein.</p>
+          <div class="frow">
+            <div class="fg"><label>Customer Name</label><input id="tName" placeholder="e.g. Rajesh Mehta"></div>
+            <div class="fg"><label>Business / City</label><input id="tBiz" placeholder="e.g. Mehta Garments, Delhi"></div>
+          </div>
+          <div class="fg"><label>Testimonial Text</label><textarea id="tText" style="min-height:70px" placeholder="Customer ka feedback yahan likhein"></textarea></div>
+          <button class="savebtn" onclick="addTesti()">➕ Add Testimonial</button>
+          <div id="testiAdminList" style="margin-top:16px;display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+        <div class="ecard" style="grid-column:1/-1">
+          <div class="ecard-title">🏬 Showroom Visit Section</div>
+          <div class="fg"><label>Showroom Video URL (YouTube embed or .mp4, optional)</label><input id="srVideo" placeholder="https://www.youtube.com/embed/XXXXXXXX"></div>
+          <div class="fg">
+            <label>Showroom Photo (used if no video)</label>
+            <div class="photo-upload-area" id="srUploadArea">
+              <input type="file" id="srPhotoFile" accept="image/*" onchange="handleSrPhoto(this)">
+              <div class="photo-upload-icon">📷</div>
+              <div class="photo-upload-text"><span>Click to upload</span> or drag & drop</div>
+            </div>
+            <img id="srPhotoPreview" class="single-preview" alt="Preview">
+            <div class="or-divider">OR</div>
+            <input id="srPhoto" class="fi" style="margin:0" placeholder="Paste image URL..." oninput="handleSrUrl(this.value)">
+          </div>
+          <div class="fg"><label>Description</label><textarea id="srNote">Walk into our showroom and see 500+ styles in person before you place your order. Our team will help you pick the best styles for your store.</textarea></div>
+          <button class="savebtn" onclick="saveC('showroom')">💾 Save</button>
         </div>
         <div class="ecard" style="grid-column:1/-1">
           <div class="ecard-title">🤖 Chatbot FAQs</div>
@@ -799,7 +828,7 @@ function onIdbReady(fn){if(IDB_READY)fn();else IDB_CALLBACKS.push(fn);}
 // One-time migration: copy localStorage tjc2_* keys into IDB
 function _migrateFromLocalStorage(cb){
   var keys=['prods','cats','enqs','activity','pass','currentUser','lastBackup','pendingPush',
-    'content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
+    'content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
   var migrated=0;
   var tsKeys=keys.map(function(k){return k+'_ts';});
   var allKeys=keys.concat(tsKeys);
@@ -870,7 +899,7 @@ var S={
       try{localStorage.setItem('tjc2_'+k,JSON.stringify(v));}catch(e){}
     }
     // Sync to Firebase
-    var fbKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
+    var fbKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
     if(fbKeys.indexOf(k)>=0){
       pushKeyToFirebase(k,v,ts);
     }
@@ -973,8 +1002,8 @@ function startFirebaseListeners(){
 // ══ FIREBASE SYNC — pull cloud data into IDB on login ══
 function syncFromFirebase(callback){
   if(!DB){callback&&callback();return;}
-  var tsKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
-  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','activity'];
+  var tsKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
+  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','activity'];
   var done=0;
   var pendingPush=[];
   keys.forEach(function(k){
@@ -1032,8 +1061,8 @@ function finishSync(callback,pendingPush){
 // ══ PUSH all IDB data to Firebase (first time setup / manual sync) ══
 function pushAllToFirebase(){
   if(!DB)return;
-  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','activity'];
-  var tsKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
+  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','activity'];
+  var tsKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
   var now=Date.now();
   keys.forEach(function(k){
     var val=S.g(k);
@@ -1081,6 +1110,12 @@ var DEF_FAQS=[
   {q:'GST invoice milega?',a:'Haan, har order ke saath proper GST invoice diya jata hai.'},
   {q:'Sample available hai?',a:'Haan, sample pieces available hain, please WhatsApp par enquiry karein.'},
   {q:'Konse sizes available hain?',a:'Hamare paas S se XXL tak sizes available hain, category ke hisab se vary kar sakta hai.'}
+];
+
+var DEF_TESTIMONIALS=[
+  {name:'Rajesh Mehta',biz:'Mehta Garments, Delhi',text:'The Jeans Club ke saath 3 saal se kaam kar raha hoon. Quality consistent hai aur time pe delivery milti hai.'},
+  {name:'Sanjay Patel',biz:'Patel Fashion Hub, Ahmedabad',text:'Showroom visit karke order dena best decision tha. Itni variety ek jagah dekhna bahut helpful raha.'},
+  {name:'Imran Sheikh',biz:'Sheikh Traders, Mumbai',text:'Pricing aur quality dono best hain. WhatsApp pe enquiry karte hi turant response milta hai.'}
 ];
 
 function getProds(){return S.g('prods')||DEF_PRODS}
@@ -1179,7 +1214,7 @@ window.doLogout=function(){
 // ══ SILENT PUBLIC SYNC — pull latest from Firebase on every page load ══
 function silentPublicSync(){
   if(!DB){return;}
-  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
+  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
   var fetched=0;var changed=false;
   keys.forEach(function(k){
     DB.ref('tjc/'+k+'_ts').once('value',function(tsSnap){
@@ -1213,7 +1248,7 @@ var _publicListenerStarted=false;
 function startPublicRealtimeListener(){
   if(!DB||_publicListenerStarted){return;}
   _publicListenerStarted=true;
-  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat'];
+  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
   keys.forEach(function(k){
     DB.ref('tjc/'+k).on('value',function(snap){
       var val=snap.val();
@@ -1308,10 +1343,29 @@ function loadContentFields(){
   // About
   var fab=document.getElementById('fabout');if(fab)fab.value=about.about||'';
   var fyr=document.getElementById('fyear');if(fyr)fyr.value=about.year||'';
+  // Google Rating
+  var rtVal=document.getElementById('rtVal');if(rtVal)rtVal.value=stats.rtVal||'4.8';
+  var rtLabel=document.getElementById('rtLabel');if(rtLabel)rtLabel.value=stats.rtLabel||'350+ Google Reviews';
   // Shop Location
   var loc=S.g('content_location')||{addr:'',url:''};
   var laddr=document.getElementById('locaddr');if(laddr)laddr.value=loc.addr||'';
   var lurl=document.getElementById('locurl');if(lurl)lurl.value=loc.url||'';
+  // Testimonials
+  renderTestiAdmin();
+  // Showroom
+  var showroom=S.g('content_showroom')||{video:'',photo:'',note:'Walk into our showroom and see 500+ styles in person before you place your order. Our team will help you pick the best styles for your store.'};
+  var srVideo=document.getElementById('srVideo');if(srVideo)srVideo.value=showroom.video||'';
+  currentSrPhotoData=showroom.photo||'';
+  var srPhotoInput=document.getElementById('srPhoto');
+  if(srPhotoInput)srPhotoInput.value=(showroom.photo&&!showroom.photo.startsWith('data:'))?showroom.photo:'';
+  var srPhotoPreview=document.getElementById('srPhotoPreview');
+  if(srPhotoPreview){
+    if(currentSrPhotoData){srPhotoPreview.src=currentSrPhotoData;srPhotoPreview.style.display='block';}
+    else{srPhotoPreview.style.display='none';}
+  }
+  var srUploadArea=document.getElementById('srUploadArea');
+  if(srUploadArea){var pt=srUploadArea.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span>Click to upload</span> or drag & drop';}
+  var srNote=document.getElementById('srNote');if(srNote)srNote.value=showroom.note||'';
   // Chatbot FAQs
   var faqs=S.g('content_faqs')||DEF_FAQS;
   var cfaqs=document.getElementById('cfaqs');
@@ -1361,6 +1415,7 @@ document.addEventListener('click',function(e){if(e.target.classList.contains('mb
 // ══ PHOTO UPLOAD HELPERS ══
 var currentPhotosData=[]; // array of base64/URL strings for product (first = main)
 var currentCatPhotoData=''; // for category
+var currentSrPhotoData=''; // for showroom
 
 function renderPhotoGallery(){
   var g=document.getElementById('photoGallery');
@@ -1562,6 +1617,46 @@ function handleCatUrl(url){
   if(!url)return;
   currentCatPhotoData=url;
   var prev=document.getElementById('catPhotoPreview');
+  prev.src=url;
+  prev.style.display='block';
+  prev.onerror=function(){prev.style.display='none'};
+}
+
+function handleSrPhoto(input){
+  var file=input.files[0];
+  if(!file)return;
+  if(file.size>5*1024*1024){toast('File too large! Max 5MB','err');return}
+  var useCf=cfConfigured();
+  var ua=document.getElementById('srUploadArea');
+  var reader=new FileReader();
+  reader.onload=function(e){
+    compressImage(e.target.result,1200,1200,0.88,false,function(compressed){
+      function applyResult(url){
+        currentSrPhotoData=url;
+        var prev=document.getElementById('srPhotoPreview');
+        prev.src=url;
+        prev.style.display='block';
+        document.getElementById('srPhoto').value='';
+        if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:#4ade80">✅ Photo uploaded!</span><br>Click to change';}
+      }
+      if(useCf){
+        if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>';}
+        uploadToCloudflare(compressed,fixFilenameExt(compressed,file.name),function(url,err){
+          if(url)applyResult(url);
+          else{toast('Upload failed: '+err+' — saved locally instead','err');applyResult(compressed);}
+        });
+      }else{
+        applyResult(compressed);
+      }
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleSrUrl(url){
+  if(!url)return;
+  currentSrPhotoData=url;
+  var prev=document.getElementById('srPhotoPreview');
   prev.src=url;
   prev.style.display='block';
   prev.onerror=function(){prev.style.display='none'};
@@ -2215,7 +2310,10 @@ function saveC(sec){
   } else if(sec==='contact'){
     d={ph:document.getElementById('cph').value,em:document.getElementById('cem').value,hr:document.getElementById('chr').value,gst:document.getElementById('cgst').value};
   } else if(sec==='stats'){
-    d={s1v:document.getElementById('s1v').value,s1l:document.getElementById('s1l').value,s2v:document.getElementById('s2v').value,s2l:document.getElementById('s2l').value,s3v:document.getElementById('s3v').value,s3l:document.getElementById('s3l').value};
+    d={s1v:document.getElementById('s1v').value,s1l:document.getElementById('s1l').value,s2v:document.getElementById('s2v').value,s2l:document.getElementById('s2l').value,s3v:document.getElementById('s3v').value,s3l:document.getElementById('s3l').value,rtVal:document.getElementById('rtVal').value,rtLabel:document.getElementById('rtLabel').value};
+  } else if(sec==='showroom'){
+    var srUrlVal=document.getElementById('srPhoto').value.trim();
+    d={video:document.getElementById('srVideo').value.trim(),photo:currentSrPhotoData||srUrlVal||'',note:document.getElementById('srNote').value.trim()};
   } else if(sec==='about'){
     d={about:document.getElementById('fabout').value,year:document.getElementById('fyear').value};
   } else if(sec==='location'){
@@ -2235,6 +2333,40 @@ function saveC(sec){
   }
   S.s('content_'+sec,d);
   toast('Saved successfully!','ok');
+}
+
+function renderTestiAdmin(){
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  var list=S.g('content_testimonials')||DEF_TESTIMONIALS;
+  var box=document.getElementById('testiAdminList');
+  if(!box)return;
+  box.innerHTML=list.map(function(t,i){
+    return '<div style="background:rgba(245,237,214,.05);border:1px solid rgba(245,237,214,.1);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+      +'<div style="font-size:12px;line-height:1.5"><b>'+esc(t.name)+'</b>'+(t.biz?', '+esc(t.biz):'')+'<br><span style="color:rgba(245,237,214,.6)">'+esc(t.text)+'</span></div>'
+      +'<button onclick="delTesti('+i+')" title="Remove" style="background:none;border:none;color:#e66;cursor:pointer;font-size:16px;flex-shrink:0;padding:0 4px">✕</button>'
+      +'</div>';
+  }).join('')||'<p style="font-size:12px;color:rgba(245,237,214,.35)">Abhi koi testimonial nahi hai.</p>';
+}
+function addTesti(){
+  var name=document.getElementById('tName').value.trim();
+  var biz=document.getElementById('tBiz').value.trim();
+  var text=document.getElementById('tText').value.trim();
+  if(!name||!text){toast('Naam aur testimonial text zaroori hai','err');return}
+  var list=(S.g('content_testimonials')||DEF_TESTIMONIALS).slice();
+  list.push({name:name,biz:biz,text:text});
+  S.s('content_testimonials',list);
+  document.getElementById('tName').value='';
+  document.getElementById('tBiz').value='';
+  document.getElementById('tText').value='';
+  renderTestiAdmin();
+  toast('Testimonial added!','ok');
+}
+function delTesti(i){
+  var list=(S.g('content_testimonials')||DEF_TESTIMONIALS).slice();
+  list.splice(i,1);
+  S.s('content_testimonials',list);
+  renderTestiAdmin();
+  toast('Testimonial removed','ok');
 }
 
 // ══ SETTINGS ══
@@ -2263,6 +2395,8 @@ function exportData(){
     content_location:S.g('content_location'),
     content_faqs:S.g('content_faqs'),
     content_aichat:S.g('content_aichat'),
+    content_testimonials:S.g('content_testimonials'),
+    content_showroom:S.g('content_showroom'),
     exportedAt:new Date().toISOString()
   };
   var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
@@ -2295,6 +2429,8 @@ function importData(input){
       if(d.content_location)S.s('content_location',d.content_location);
       if(d.content_faqs)S.s('content_faqs',d.content_faqs);
       if(d.content_aichat)S.s('content_aichat',d.content_aichat);
+      if(d.content_testimonials)S.s('content_testimonials',d.content_testimonials);
+      if(d.content_showroom)S.s('content_showroom',d.content_showroom);
       refreshCatDropdowns();renderProds();renderCats();renderEnqs();updateDash();loadContentFields();
       toast('Backup restored successfully!','ok');
       logActivity('Imported data backup');
@@ -2357,6 +2493,8 @@ function buildWebsiteHTML(){
   var mapsEmbedSrc=locQuery?('https://www.google.com/maps?q='+locQuery+'&output=embed'):'';
   var faqs=S.g('content_faqs')||DEF_FAQS;
   var embeddedFaqs=JSON.stringify(faqs);
+  var testimonials=S.g('content_testimonials')||DEF_TESTIMONIALS;
+  var showroom=S.g('content_showroom')||{video:'',photo:'',note:'Walk into our showroom and see 500+ styles in person before you place your order. Our team will help you pick the best styles for your store.'};
   var aiChat=S.g('content_aichat')||{url:''};
   var embeddedAiUrl=JSON.stringify(aiChat.url||'');
   var embeddedBiz=JSON.stringify({name:'The Jeans Club',about:about.about,phone:contact.ph,address:location.addr});
@@ -2371,6 +2509,25 @@ function buildWebsiteHTML(){
     var img=c.photo?'<img src="'+eH(c.photo)+'" alt="'+eH(c.name)+'" onerror="this.style.display=\'none\'">':'<div class="no-img"><span>'+eH(c.name.charAt(0))+'</span></div>';
     return '<a class="cat-item anim-item" href="javascript:void(0)" onclick="openCatView(\''+eH(c.id)+'\')"><div class="cat-img">'+img+'</div><div class="cat-info"><p class="cat-name">'+eH(c.name)+'</p>'+(c.styles?'<p class="cat-sub">'+eH(c.styles)+'</p>':'')+'</div></a>';
   }).join('');
+
+  var latestTestimonials=testimonials.slice().reverse();
+  var testimonialsHTML=latestTestimonials.map(function(t,i){
+    var initial=eH((t.name||'?').charAt(0).toUpperCase());
+    var extraCls=i>=1?' testi-more':'';
+    var latestBadge=i===0?'<span class="testi-latest-badge">Latest</span>':'';
+    return '<div class="testi-card anim-item'+extraCls+'">'
+      +latestBadge
+      +'<div class="testi-stars">\u2605\u2605\u2605\u2605\u2605</div>'
+      +'<p class="testi-text">\u201c'+eH(t.text)+'\u201d</p>'
+      +'<div class="testi-person"><div class="testi-avatar">'+initial+'</div><div><div class="testi-name">'+eH(t.name)+'</div>'+(t.biz?'<div class="testi-biz">'+eH(t.biz)+'</div>':'')+'</div></div>'
+      +'</div>';
+  }).join('');
+  var testimonialsHasMore=latestTestimonials.length>1;
+
+  var showroomMediaHTML=showroom.video
+    ?'<div class="showroom-media"><iframe src="'+eH(showroom.video)+'" loading="lazy" allowfullscreen title="Showroom Video"></iframe></div>'
+    :(showroom.photo?'<div class="showroom-media"><img src="'+eH(showroom.photo)+'" alt="Showroom" onerror="this.style.display=\'none\'"></div>':'');
+  var hasShowroomMedia=!!(showroom.video||showroom.photo);
 
   function fromPriceLabel(price){
     var n=parseInt(price);
@@ -2467,6 +2624,11 @@ function buildWebsiteHTML(){
     +'\n.stat-cell:last-child{border-right:none}'
     +'\n.stat-v{font-size:40px;font-weight:300;letter-spacing:-1px}'
     +'\n.stat-l{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#888;margin-top:6px}'
+    +'\n.trust-strip{display:flex;align-items:center;justify-content:center;gap:10px;padding:16px 24px;background:#000;color:#fff;font-size:11px;letter-spacing:1px;text-transform:uppercase;flex-wrap:wrap}'
+    +'\n.trust-stars{color:#d4af37;font-size:13px;letter-spacing:2px}'
+    +'\n.trust-val{font-weight:700;font-size:13px}'
+    +'\n.trust-sep{opacity:.35}'
+    +'\n.trust-label{opacity:.75}'
     +'\n.section{padding:80px 24px}'
     +'\n.sec-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:40px;border-bottom:1px solid #e5e5e5;padding-bottom:16px}'
     +'\n.sec-title{font-size:11px;letter-spacing:3px;text-transform:uppercase;font-weight:400}'
@@ -2531,13 +2693,6 @@ function buildWebsiteHTML(){
     +'\n.cat-view-close{background:none;border:none;font-size:28px;cursor:pointer;color:#000;line-height:1;padding:4px 8px;flex-shrink:0}'
     +'\n.cat-view-empty{display:none;text-align:center;padding:60px 20px;color:#888}'
     +'\n.cat-view-empty p{font-size:13px;margin-bottom:24px;letter-spacing:.5px}'
-    +'\n.wa-btn{position:fixed;bottom:20px;right:20px;z-index:9999;background:#25D366;color:#fff;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(37,211,102,.4);transition:transform .3s}'
-    +'\n.wa-btn:hover{transform:scale(1.1)}'
-    +'\n.wa-btn svg{width:21px;height:21px}'
-    +'\n.shop-btn{position:fixed;bottom:70px;right:20px;z-index:9999;background:#0d1a2e;color:#c9a227;border:1.5px solid #c9a227;width:42px;height:42px;border-radius:50%;font-size:17px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:transform .3s}'
-    +'\n.shop-btn:hover{transform:scale(1.06)}'
-    +'\n.chat-btn{position:fixed;bottom:120px;right:20px;z-index:9999;background:#000;color:#fff;width:42px;height:42px;border-radius:50%;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:transform .3s;border:1.5px solid #c9a227;cursor:pointer}'
-    +'\n.chat-btn:hover{transform:scale(1.06)}'
     +'\n.chat-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;width:100%;height:100%;background:#fff;display:none;flex-direction:column;overflow:hidden}'
     +'\n.chat-panel.open{display:flex}'
     +'\n.chat-head{background:#000;color:#fff;padding:16px 18px;padding-top:calc(16px + env(safe-area-inset-top));display:flex;justify-content:space-between;align-items:center;flex-shrink:0}'
@@ -2584,6 +2739,46 @@ function buildWebsiteHTML(){
     +'\n.prod-add-cart{margin-top:8px;width:100%;background:#0d1a2e;color:#c9a227;border:1px solid #c9a227;padding:8px;font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-radius:3px;font-family:inherit;transition:all .2s}'
     +'\n.prod-add-cart:hover{background:#c9a227;color:#0d1a2e}'
     +'\n.qv-add-cart-btn:hover{background:#c9a227;color:#0d1a2e}'
+    +'\n.testi-sec{border-top:1px solid #e5e5e5}'
+    +'\n.sec-sub{font-size:10.5px;color:#999;letter-spacing:.5px}'
+    +'\n.testi-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:24px}'
+    +'\n.testi-card{background:#fafafa;border:1px solid #e5e5e5;padding:32px 28px;border-radius:4px;position:relative;flex:0 1 360px;max-width:100%}'
+    +'\n.testi-card.testi-more{display:none}'
+    +'\n.testi-grid.expanded .testi-card.testi-more{display:block}'
+    +'\n.testi-latest-badge{position:absolute;top:-1px;right:-1px;background:#000;color:#d4af37;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:5px 12px}'
+    +'\n.testi-more-wrap{text-align:center;margin-top:32px}'
+    +'\n.testi-more-btn{background:transparent;border:1px solid #000;color:#000;padding:12px 32px;font-size:11px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;font-family:inherit;transition:all .2s}'
+    +'\n.testi-more-btn:hover{background:#000;color:#fff}'
+    +'\n.testi-stars{color:#d4af37;font-size:13px;letter-spacing:2px;margin-bottom:14px}'
+    +'\n.testi-text{font-size:13.5px;line-height:1.8;color:#333;min-height:80px}'
+    +'\n.testi-person{display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid #e5e5e5}'
+    +'\n.testi-avatar{width:38px;height:38px;border-radius:50%;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}'
+    +'\n.testi-name{font-size:12px;font-weight:700;letter-spacing:.5px}'
+    +'\n.testi-biz{font-size:11px;color:#888;margin-top:2px}'
+    +'\n.showroom-sec{position:relative;background:#0a0a0a;color:#fff;padding:0;overflow:hidden;min-height:560px}'
+    +'\n.showroom-sec.no-media{min-height:0}'
+    +'\n.showroom-inner{position:relative;max-width:1200px;margin:0 auto;min-height:560px;display:flex;align-items:flex-end}'
+    +'\n.showroom-inner.no-media{min-height:0;max-width:760px;display:block}'
+    +'\n.showroom-inner.no-media .showroom-text{padding:56px 24px;text-align:center;align-items:center}'
+    +'\n.showroom-inner.no-media .showroom-text p{max-width:560px}'
+    +'\n.showroom-inner.no-media .showroom-actions{justify-content:center}'
+    +'\n.showroom-media{position:absolute;inset:0;overflow:hidden;background:#111;z-index:0}'
+    +'\n.showroom-media iframe,.showroom-media img{width:100%;height:100%;min-height:340px;object-fit:cover;border:0;display:block}'
+    +'\n.showroom-media::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.45) 50%,rgba(0,0,0,.08) 78%);z-index:1;pointer-events:none}'
+    +'\n.showroom-text{position:relative;z-index:2;width:100%;padding:56px 48px;display:flex;flex-direction:column;justify-content:flex-end}'
+    +'\n.sec-eyebrow{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#d4af37}'
+    +'\n.showroom-text h2{font-family:inherit;font-size:32px;font-weight:300;line-height:1.25;margin:14px 0 18px}'
+    +'\n.showroom-text h2 em{font-style:normal;color:#d4af37}'
+    +'\n.showroom-text p{font-size:13.5px;line-height:1.8;color:rgba(255,255,255,.65);max-width:420px}'
+    +'\n.showroom-hours{margin-top:14px;color:rgba(255,255,255,.85)!important}'
+    +'\n.showroom-actions{display:flex;gap:14px;margin-top:28px;flex-wrap:wrap}'
+    +'\n.btn-outline-w2{background:transparent;color:#fff;padding:14px 28px;font-size:11px;letter-spacing:2px;text-transform:uppercase;display:inline-block;border:1px solid rgba(255,255,255,.5);transition:all .2s;text-decoration:none}'
+    +'\n.btn-outline-w2:hover{background:#fff;color:#000}'
+    +'\n.sticky-cta{display:none;position:fixed;left:0;right:0;bottom:0;z-index:9998;background:#fff;border-top:1px solid #e5e5e5;box-shadow:0 -4px 18px rgba(0,0,0,.12)}'
+    +'\n.sticky-cta-btn{flex:1;text-align:center;padding:9px 10px;padding-bottom:calc(9px + env(safe-area-inset-bottom));font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;text-decoration:none;border:none;border-right:1px solid #e5e5e5;cursor:pointer;font-family:inherit;line-height:1.3}'
+    +'\n.sticky-cta-visit{background:#fff;color:#000}'
+    +'\n.sticky-cta-chat{background:#0d1a2e;color:#c9a227}'
+    +'\n.sticky-cta-wa{background:#25D366;color:#fff;border-right:none}'
     +'\n.map-sec{padding:56px 24px;border-top:1px solid #e5e5e5}'
     +'\n.map-inner{max-width:1100px;margin:0 auto}'
     +'\n.map-inner iframe{width:100%;height:340px;border:0;border-radius:4px}'
@@ -2599,14 +2794,27 @@ function buildWebsiteHTML(){
     +'\n.stats-bar{grid-template-columns:1fr}'
     +'\n.stat-cell{border-right:none;border-bottom:1px solid #e5e5e5}'
     +'\n.stat-cell:last-child{border-bottom:none}'
+    +'\n.testi-grid{gap:16px}'
+    +'\n.testi-card{flex-basis:100%}'
+    +'\n.showroom-sec{min-height:420px}'
+    +'\n.showroom-inner{min-height:420px}'
+    +'\n.showroom-media,.showroom-media iframe,.showroom-media img{min-height:240px}'
+    +'\n.showroom-text{padding:32px 20px}'
+    +'\n.showroom-text h2{font-size:26px}'
+    +'\n.sticky-cta{display:flex}'
+    +'\nbody{padding-bottom:40px}'
     +'}'
     +'\n@media(max-width:480px){'
     +'\n.hero{padding:0 16px 48px}'
     +'\n.hero-actions{flex-direction:column}'
     +'\n.cats-grid{grid-template-columns:repeat(2,1fr);gap:8px}'
-    +'\n.prods-grid{grid-template-columns:1fr;gap:20px}'
+    +'\n.prods-grid{grid-template-columns:repeat(2,1fr);gap:10px}'
     +'\n.prod-img{aspect-ratio:1/1}'
+    +'\n.prod-name{font-size:11px}'
+    +'\n.prod-price{font-size:11px}'
+    +'\n.prod-moq{font-size:10px}'
     +'\n.section{padding:56px 16px}'
+    +'\n.trust-strip{font-size:10px;padding:12px 16px}'
     +'}'
     +'\n@keyframes fadeInUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}'
     +'\n@keyframes fadeInUpDim{from{opacity:0;transform:translateY(28px)}to{opacity:.55;transform:translateY(0)}}'
@@ -2728,12 +2936,34 @@ function buildWebsiteHTML(){
     +'\n<div class="stat-cell"><div class="stat-v">'+eH(stats.s3v)+'</div><div class="stat-l">'+eH(stats.s3l)+'</div></div>'
     +'\n</div>'
 
+    +(stats.rtVal?'\n<div class="trust-strip"><span class="trust-stars">\u2605\u2605\u2605\u2605\u2605</span><span class="trust-val">'+eH(stats.rtVal)+'</span><span class="trust-sep">|</span><span class="trust-label">'+eH(stats.rtLabel||'Google Reviews')+'</span></div>':'')
+
     +(cats.length
       ?'\n<section class="section" id="catalogue">'
       +'\n<div class="sec-header"><span class="sec-title">Our Collections</span><a class="sec-link" href="https://wa.me/'+phone+'" target="_blank">View All &rarr;</a></div>'
       +'\n<div class="cats-grid">'+catsHTML+'</div>'
       +'\n</section>'
       :'')
+
+    +(testimonials.length
+      ?'\n<section class="section testi-sec">'
+      +'\n<div class="sec-header"><span class="sec-title">What Our Retailers Say</span><span class="sec-sub">Latest customer feedback</span></div>'
+      +'\n<div class="testi-grid" id="testiGrid">'+testimonialsHTML+'</div>'
+      +(testimonialsHasMore?'\n<div class="testi-more-wrap"><button class="testi-more-btn" id="testiMoreBtn" onclick="toggleTestimonials()">See More Reviews</button></div>':'')
+      +'\n</section>'
+      :'')
+
+    +'\n<section class="showroom-sec'+(hasShowroomMedia?'':' no-media')+'" id="showroom">'
+    +'\n<div class="showroom-inner'+(hasShowroomMedia?'':' no-media')+'">'
+    +showroomMediaHTML
+    +'\n<div class="showroom-text">'
+    +'\n<span class="sec-eyebrow">Visit In Person</span>'
+    +'\n<h2>See It. Touch It.<br><em>Before You Buy It.</em></h2>'
+    +'\n<p>'+eH(showroom.note)+'</p>'
+    +(contact.hr?'\n<p class="showroom-hours"><b>Visiting Hours:</b> '+eH(contact.hr)+'</p>':'')
+    +'\n<div class="showroom-actions">'
+    +(mapsLink?'\n<a class="btn-white" style="background:#000;color:#fff;border-color:#000" href="'+eH(mapsLink)+'" target="_blank">Get Directions</a>':'')
+    +'\n</div></div></div></section>'
 
     // ── CATEGORY DETAIL OVERLAY ──
     +'\n<div class="cat-view" id="catView">'
@@ -2800,11 +3030,11 @@ function buildWebsiteHTML(){
     +'\n<div class="footer-bottom"><span>&copy; '+eH(String(about.year))+' The Jeans Club. All rights reserved.</span><span>GST: '+eH(contact.gst||'N/A')+'</span></div>'
     +'\n</footer>'
 
-    +'\n<a class="wa-btn" href="https://wa.me/'+phone+'" target="_blank" title="WhatsApp">'
-    +'\n<svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>'
-    +'\n</a>'
-
-    +(mapsLink?'\n<a class="shop-btn" href="'+eH(mapsLink)+'" target="_blank" title="Shop Location">\ud83d\udccd</a>':'')
+    +'\n<div class="sticky-cta">'
+    +(mapsLink?'\n<a class="sticky-cta-btn sticky-cta-visit" href="'+eH(mapsLink)+'" target="_blank">\ud83d\udccd Visit Store</a>':'')
+    +(faqs.length?'\n<button class="sticky-cta-btn sticky-cta-chat" onclick="toggleChat()">\ud83d\udcac Chat</button>':'')
+    +'\n<a class="sticky-cta-btn sticky-cta-wa" href="https://wa.me/'+phone+'" target="_blank">\ud83d\udcde WhatsApp</a>'
+    +'\n</div>'
 
     +''
     +'\n<div class="cart-panel" id="cartPanel">'
@@ -2814,8 +3044,7 @@ function buildWebsiteHTML(){
     +'\n</div>'
 
     +(faqs.length
-      ?'\n<button class="chat-btn" onclick="toggleChat()" title="Chat with us">\ud83d\udcac</button>'
-      +'\n<div class="chat-panel" id="chatPanel">'
+      ?'\n<div class="chat-panel" id="chatPanel">'
       +'\n<div class="chat-head"><div><div class="chat-head-title">TJC Assistant</div><div class="chat-head-sub">Usually replies instantly</div></div><button class="chat-close" onclick="toggleChat()">&times;</button></div>'
       +'\n<div class="chat-body" id="chatBody"></div>'
       +'\n<div class="chat-chips" id="chatChips"></div>'
@@ -3037,6 +3266,13 @@ function buildWebsiteHTML(){
     +'\n}'
     +'\n},{passive:true});'
     +'\n})();'
+    +'\nfunction toggleTestimonials(){'
+    +'\nvar grid=document.getElementById("testiGrid"),btn=document.getElementById("testiMoreBtn");'
+    +'\nif(!grid||!btn)return;'
+    +'\nvar expanded=grid.classList.toggle("expanded");'
+    +'\nbtn.textContent=expanded?"Show Less":"See More Reviews";'
+    +'\nif(!expanded){grid.scrollIntoView({behavior:"smooth",block:"start"});}'
+    +'\n}'
     +'\nfunction openCatView(catId){'
     +'\nvar cat=CATS.find(function(c){return c.id===catId;});'
     +'\nvar items=ALLPRODS.filter(function(p){return p.cat===catId;});'
