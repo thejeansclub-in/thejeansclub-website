@@ -2774,7 +2774,7 @@ function buildWebsiteHTML(){
     +'\n.showroom-actions{display:flex;gap:14px;margin-top:28px;flex-wrap:wrap}'
     +'\n.btn-outline-w2{background:transparent;color:#fff;padding:14px 28px;font-size:11px;letter-spacing:2px;text-transform:uppercase;display:inline-block;border:1px solid rgba(255,255,255,.5);transition:all .2s;text-decoration:none}'
     +'\n.btn-outline-w2:hover{background:#fff;color:#000}'
-    +'\n.sticky-cta{display:none;position:fixed;left:0;right:0;bottom:0;z-index:9998;background:#fff;border-top:1px solid #e5e5e5;box-shadow:0 -4px 18px rgba(0,0,0,.12)}'
+    +'\n.sticky-cta{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:9998;background:#fff;border-top:1px solid #e5e5e5;box-shadow:0 -4px 18px rgba(0,0,0,.12)}'
     +'\n.sticky-cta-btn{flex:1;text-align:center;padding:9px 10px;padding-bottom:calc(9px + env(safe-area-inset-bottom));font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;text-decoration:none;border:none;border-right:1px solid #e5e5e5;cursor:pointer;font-family:inherit;line-height:1.3}'
     +'\n.sticky-cta-visit{background:#fff;color:#000}'
     +'\n.sticky-cta-chat{background:#0d1a2e;color:#c9a227}'
@@ -2954,8 +2954,8 @@ function buildWebsiteHTML(){
       :'')
 
     +'\n<section class="showroom-sec'+(hasShowroomMedia?'':' no-media')+'" id="showroom">'
-    +'\n<div class="showroom-inner'+(hasShowroomMedia?'':' no-media')+'">'
     +showroomMediaHTML
+    +'\n<div class="showroom-inner'+(hasShowroomMedia?'':' no-media')+'">'
     +'\n<div class="showroom-text">'
     +'\n<span class="sec-eyebrow">Visit In Person</span>'
     +'\n<h2>See It. Touch It.<br><em>Before You Buy It.</em></h2>'
