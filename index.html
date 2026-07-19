@@ -129,7 +129,7 @@ tr:hover td{background:rgba(201,162,39,.03)}
 .abtn-wrap{display:flex;gap:6px}
 
 /* MODAL */
-.mbk{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.mbk{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9500;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
 .mbk.open{display:flex}
 .mbox{background:var(--navy2);border:1px solid rgba(201,162,39,.2);border-radius:12px;width:100%;max-width:580px;box-shadow:0 32px 80px rgba(0,0,0,.7);margin:auto}
 .mhead{padding:20px 24px 15px;border-bottom:1px solid rgba(201,162,39,.08);display:flex;align-items:center;justify-content:space-between}
@@ -137,7 +137,7 @@ tr:hover td{background:rgba(201,162,39,.03)}
 .mcls{background:none;border:none;color:rgba(245,237,214,.35);font-size:20px;cursor:pointer;line-height:1;transition:color .2s}
 .mcls:hover{color:var(--cream)}
 .mbody{padding:22px 24px}
-.mfoot{padding:14px 24px 22px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(201,162,39,.06)}
+.mfoot{padding:14px 24px 22px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(201,162,39,.06);position:sticky;bottom:0;background:var(--navy2);z-index:5;box-shadow:0 -6px 14px rgba(0,0,0,.35)}
 .fg{margin-bottom:14px}
 .fg label{display:block;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(245,237,214,.38);margin-bottom:6px}
 .fg input,.fg select,.fg textarea{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(201,162,39,.15);color:var(--cream);padding:10px 13px;font-size:13px;font-family:'Montserrat',sans-serif;outline:none;transition:border-color .3s;border-radius:4px}
@@ -484,7 +484,7 @@ tr:hover td{background:rgba(201,162,39,.03)}
         <div class="ecard" style="grid-column:1/-1">
           <div class="ecard-title">🤖 Chatbot FAQs</div>
           <p style="font-size:11px;color:rgba(245,237,214,.4);margin-bottom:10px;line-height:1.6">Ek line me ek sawaal-jawab daalein, is format me: <b>Sawaal :: Jawab</b><br>Customer jab website pe chatbot me sawaal type/select karega, matching jawab dikhega.</p>
-          <div class="fg"><textarea id="cfaqs" style="min-height:220px;font-family:monospace;font-size:12px" placeholder="MOQ kya hai? :: Hamara minimum order quantity 50 pieces per style hai.
+          <div class="fg"><textarea id="cfaqs" style="min-height:220px;font-family:monospace;font-size:12px" placeholder="MOQ kya hai? :: Hamara minimum order quantity 1 Set per style hai.
 Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me dispatch ho jata hai."></textarea></div>
           <button class="savebtn" onclick="saveC('faqs')">💾 Save FAQs</button>
         </div>
@@ -550,22 +550,29 @@ Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me disp
       <div class="frow">
         <div class="fg"><label>Product Name *</label><input id="pn" placeholder="e.g. Slim Fit Jeans"></div>
         <div class="fg"><label>Category *</label>
-          <select id="pc">
+          <select id="pc" onchange="onProdCatChangeForSku()">
             
             <option value="">Select Category</option>
           </select>
         </div>
       </div>
       <div class="frow">
-        <div class="fg"><label>Price ₹</label><input type="number" id="pp" placeholder="350"></div>
-        <div class="fg"><label>MOQ (pcs)</label><input type="number" id="pm" placeholder="50"></div>
+        <div class="fg"><label>Sell Type *</label>
+          <select id="psellType" onchange="onSellTypeChange()">
+            <option value="set">📦 Set-wise (sizes bundled together)</option>
+            <option value="piece">1️⃣ Piece-wise (sold per single piece)</option>
+          </select>
+        </div>
+        <div class="fg"><label id="pmLabel">MOQ (Sets)</label><input type="number" id="pm" placeholder="1" value="1"></div>
       </div>
       <div class="frow">
+        <div class="fg"><label>Price ₹</label><input type="number" id="pp" placeholder="350"></div>
         <div class="fg"><label>SKU Code</label><input id="psk" placeholder="TJC-DJ-001"></div>
-        <div class="fg"><label>Badge</label>
-          <select id="pb"><option value="">None</option><option value="Hot">Hot</option><option value="New">New</option><option value="Top">Top</option></select>
-        </div>
       </div>
+      <div class="fg"><label>Badge</label>
+        <select id="pb"><option value="">None</option><option value="Hot">Hot</option><option value="New">New</option><option value="Top">Top</option></select>
+      </div>
+      <div class="fg"><label><span id="pszLabel">Set Sizes</span> <span id="pszHint" style="color:rgba(245,237,214,.4);font-weight:400;text-transform:none;letter-spacing:0">(comma separated — ye hi 1 Set banate hain, e.g. 6 sizes = 1 Set of 6 Pcs)</span></label><input id="psize" placeholder="e.g. 28, 30, 32, 34, 36, 38 or S, M, L, XL, XXL"></div>
       <div class="fg"><label>Stock Status</label>
         <select id="pstock"><option value="instock">✅ In Stock</option><option value="outofstock">❌ Out of Stock</option></select>
       </div>
@@ -612,7 +619,7 @@ Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me disp
       <div class="fg"><label>Category Name *</label><input id="cn" placeholder="e.g. Denim Jeans"></div>
       <div class="fg"><label>Tag Label</label><input id="ct" placeholder="● Denim Collection"></div>
       <div class="fg"><label>Starting Price</label><input id="cprice" placeholder="From ₹350"></div>
-      <div class="fg"><label>MOQ Label</label><input id="cmoq" placeholder="Min 50 pcs"></div>
+      <div class="fg"><label>MOQ Label</label><input id="cmoq" placeholder="Min 1 Set"></div>
       <div class="fg"><label>Styles Count</label><input id="cstyles" placeholder="80+ Styles"></div>
       <div class="fg">
         <label>Category Photo</label>
@@ -913,6 +920,8 @@ function pushKeyToFirebase(k,v,ts){
     queuePendingPush(k);
     return;
   }
+  // Firebase rejects 'undefined' values anywhere in the object — strip them via JSON round-trip
+  try{v=JSON.parse(JSON.stringify(v));}catch(e){}
   DB.ref('tjc/'+k).set(v).then(function(){
     DB.ref('tjc/'+k+'_ts').set(ts).catch(function(){});
     clearPendingPush(k);
@@ -1088,23 +1097,23 @@ var CAT_NAMES=_STATIC_CAT_NAMES;
 var CAT_ICONS=_STATIC_CAT_ICONS;
 
 var DEF_PRODS=[
-  {id:1,name:'Slim Fit Stretch Jeans',cat:'jeans',price:350,moq:50,sku:'TJC-DJ-001',badge:'Hot',photo:'https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&q=75',desc:'Premium stretch denim'},
-  {id:2,name:'Regular Fit Classic Jeans',cat:'jeans',price:320,moq:50,sku:'TJC-DJ-022',badge:'New',photo:'https://images.unsplash.com/photo-1475178626620-a4d074967452?w=400&q=75',desc:'Classic regular fit'},
-  {id:3,name:'Oxford Formal Shirt',cat:'shirts',price:280,moq:100,sku:'TJC-FS-042',badge:'Hot',photo:'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400&q=75',desc:'Premium Oxford cotton'},
-  {id:4,name:'Classic Denim Jacket',cat:'jackets',price:620,moq:30,sku:'TJC-JK-107',badge:'Hot',photo:'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&q=75',desc:'Classic blue denim jacket'},
-  {id:5,name:'Premium Round Neck Tee',cat:'tshirts',price:195,moq:120,sku:'TJC-TS-089',badge:'Top',photo:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=75',desc:'100% cotton premium tee'},
-  {id:6,name:'Cargo Shorts',cat:'shorts',price:220,moq:60,sku:'TJC-SH-055',badge:'Hot',photo:'https://images.unsplash.com/photo-1591195853828-11db59a44f43?w=400&q=75',desc:'Multi-pocket cargo shorts'}
+  {id:1,name:'Slim Fit Stretch Jeans',cat:'jeans',price:350,moq:1,sizes:'28, 30, 32, 34, 36, 38',sku:'TJC-DJ-001',badge:'Hot',photo:'https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&q=75',desc:'Premium stretch denim'},
+  {id:2,name:'Regular Fit Classic Jeans',cat:'jeans',price:320,moq:1,sizes:'28, 30, 32, 34, 36, 38',sku:'TJC-DJ-022',badge:'New',photo:'https://images.unsplash.com/photo-1475178626620-a4d074967452?w=400&q=75',desc:'Classic regular fit'},
+  {id:3,name:'Oxford Formal Shirt',cat:'shirts',price:280,moq:1,sizes:'S, M, L, XL, XXL',sku:'TJC-FS-042',badge:'Hot',photo:'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400&q=75',desc:'Premium Oxford cotton'},
+  {id:4,name:'Classic Denim Jacket',cat:'jackets',price:620,moq:1,sizes:'S, M, L, XL, XXL',sku:'TJC-JK-107',badge:'Hot',photo:'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&q=75',desc:'Classic blue denim jacket'},
+  {id:5,name:'Premium Round Neck Tee',cat:'tshirts',price:195,moq:1,sizes:'S, M, L, XL, XXL',sku:'TJC-TS-089',badge:'Top',photo:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=75',desc:'100% cotton premium tee'},
+  {id:6,name:'Cargo Shorts',cat:'shorts',price:220,moq:1,sizes:'28, 30, 32, 34, 36, 38',sku:'TJC-SH-055',badge:'Hot',photo:'https://images.unsplash.com/photo-1591195853828-11db59a44f43?w=400&q=75',desc:'Multi-pocket cargo shorts'}
 ];
 var DEF_CATS=[
-  {id:'jeans',name:'Jeans & Denim',tag:'● Denim Collection',price:'From ₹350',moq:'Min 50 pcs',styles:'80+ Styles',photo:'https://images.unsplash.com/photo-1542272604-787c3835535d?w=500&q=80'},
-  {id:'shirts',name:'Formal Shirts',tag:'● Formal Collection',price:'From ₹280',moq:'Min 100 pcs',styles:'60+ Styles',photo:'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=500&q=80'},
-  {id:'jackets',name:'Jackets & Blazers',tag:'● Outerwear',price:'From ₹620',moq:'Min 30 pcs',styles:'30+ Styles',photo:'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500&q=80'},
-  {id:'tshirts',name:'T-Shirts & Polos',tag:'● Casual Collection',price:'From ₹195',moq:'Min 120 pcs',styles:'100+ Styles',photo:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&q=80'},
-  {id:'shorts',name:'Shorts & Tracks',tag:'● Casual Collection',price:'From ₹220',moq:'Min 60 pcs',styles:'40+ Styles',photo:'https://images.unsplash.com/photo-1591195853828-11db59a44f43?w=500&q=80'}
+  {id:'jeans',name:'Jeans & Denim',tag:'● Denim Collection',price:'From ₹350',moq:'Min 1 Set',styles:'80+ Styles',photo:'https://images.unsplash.com/photo-1542272604-787c3835535d?w=500&q=80'},
+  {id:'shirts',name:'Formal Shirts',tag:'● Formal Collection',price:'From ₹280',moq:'Min 1 Set',styles:'60+ Styles',photo:'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=500&q=80'},
+  {id:'jackets',name:'Jackets & Blazers',tag:'● Outerwear',price:'From ₹620',moq:'Min 1 Set',styles:'30+ Styles',photo:'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500&q=80'},
+  {id:'tshirts',name:'T-Shirts & Polos',tag:'● Casual Collection',price:'From ₹195',moq:'Min 1 Set',styles:'100+ Styles',photo:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&q=80'},
+  {id:'shorts',name:'Shorts & Tracks',tag:'● Casual Collection',price:'From ₹220',moq:'Min 1 Set',styles:'40+ Styles',photo:'https://images.unsplash.com/photo-1591195853828-11db59a44f43?w=500&q=80'}
 ];
 
 var DEF_FAQS=[
-  {q:'MOQ kya hai?',a:'Hamara minimum order quantity (MOQ) generally 50 pieces per style hai. Exact MOQ category ke hisab se vary kar sakta hai.'},
+  {q:'MOQ kya hai?',a:'Hamara minimum order quantity (MOQ) sirf 1 Set per style hai — set-wise order kar sakte hain.'},
   {q:'Delivery me kitna time lagta hai?',a:'Order confirm hone ke baad 48 hours me dispatch ho jata hai. Delivery location ke hisab se 2-5 din lagte hain.'},
   {q:'Payment kaise kar sakte hain?',a:'Hum bank transfer, UPI aur cash accept karte hain. Bulk orders ke liye advance payment required hota hai.'},
   {q:'GST invoice milega?',a:'Haan, har order ke saath proper GST invoice diya jata hai.'},
@@ -1118,7 +1127,7 @@ var DEF_TESTIMONIALS=[
   {name:'Imran Sheikh',biz:'Sheikh Traders, Mumbai',text:'Pricing aur quality dono best hain. WhatsApp pe enquiry karte hi turant response milta hai.'}
 ];
 
-function getProds(){return S.g('prods')||DEF_PRODS}
+function getProds(){var v=S.g('prods');return (v&&v.length!==undefined)?v:JSON.parse(JSON.stringify(DEF_PRODS))}
 function setProds(p){S.s('prods',p)}
 function getCats(){return S.g('cats')||DEF_CATS}
 function setCats(c){S.s('cats',c)}
@@ -1504,6 +1513,82 @@ function loadBgRemovalLib(){
   }
   return _bgRemovalLibPromise;
 }
+// After AI background removal, the mask sometimes leaves faint semi-transparent
+// halos and small disconnected specks behind (e.g. a supplier watermark/logo/text
+// stamped in a corner of the source photo). This pass: (1) fully clears any
+// near-transparent "ghost" pixels, then (2) finds connected blobs of remaining
+// opaque pixels and drops any blob that's much smaller than the main product —
+// which is exactly the size/shape signature of a stray logo or text mark —
+// so only the actual product is left on a clean transparent background.
+function cleanupBgArtifacts(dataURL,cb){
+  var img=new Image();
+  img.onload=function(){
+    try{
+      var fullW=img.width,fullH=img.height;
+      var fullCanvas=document.createElement('canvas');
+      fullCanvas.width=fullW;fullCanvas.height=fullH;
+      var fullCtx=fullCanvas.getContext('2d');
+      fullCtx.drawImage(img,0,0);
+      var fullData=fullCtx.getImageData(0,0,fullW,fullH);
+      var fullPx=fullData.data;
+      var HALO_ALPHA=22;
+      for(var i=3;i<fullPx.length;i+=4){
+        if(fullPx[i]<HALO_ALPHA)fullPx[i]=0;
+      }
+      var maxDim=480;
+      var scale=Math.min(1,maxDim/Math.max(fullW,fullH));
+      var aw=Math.max(1,Math.round(fullW*scale)),ah=Math.max(1,Math.round(fullH*scale));
+      var smallCanvas=document.createElement('canvas');
+      smallCanvas.width=aw;smallCanvas.height=ah;
+      var smallCtx=smallCanvas.getContext('2d');
+      smallCtx.drawImage(fullCanvas,0,0,aw,ah);
+      var sPx=smallCtx.getImageData(0,0,aw,ah).data;
+      var total=aw*ah;
+      var labels=new Int32Array(total);
+      var opaque=new Uint8Array(total);
+      for(var p=0;p<total;p++){opaque[p]=sPx[p*4+3]>=HALO_ALPHA?1:0;}
+      var compId=0,compAreas=[0],stack=[];
+      for(var idx=0;idx<total;idx++){
+        if(!opaque[idx]||labels[idx])continue;
+        compId++;var area=0;
+        stack.push(idx);labels[idx]=compId;
+        while(stack.length){
+          var cur=stack.pop();area++;
+          var cx=cur%aw,cy=(cur/aw)|0;
+          var nb=[[cx-1,cy],[cx+1,cy],[cx,cy-1],[cx,cy+1]];
+          for(var n=0;n<4;n++){
+            var nx=nb[n][0],ny=nb[n][1];
+            if(nx<0||ny<0||nx>=aw||ny>=ah)continue;
+            var nIdx=ny*aw+nx;
+            if(opaque[nIdx]&&!labels[nIdx]){labels[nIdx]=compId;stack.push(nIdx);}
+          }
+        }
+        compAreas[compId]=area;
+      }
+      var largestArea=0;
+      for(var c=1;c<=compId;c++){if(compAreas[c]>largestArea)largestArea=compAreas[c];}
+      var minKeepArea=Math.max(12,largestArea*0.04);
+      var keepComp=new Uint8Array(compId+1);
+      for(var c2=1;c2<=compId;c2++){keepComp[c2]=compAreas[c2]>=minKeepArea?1:0;}
+      for(var y=0;y<fullH;y++){
+        var sy=Math.min(ah-1,Math.floor(y*scale));
+        for(var x=0;x<fullW;x++){
+          var sx=Math.min(aw-1,Math.floor(x*scale));
+          var lbl=labels[sy*aw+sx];
+          if(!(lbl&&keepComp[lbl])){
+            fullPx[(y*fullW+x)*4+3]=0;
+          }
+        }
+      }
+      fullCtx.putImageData(fullData,0,0);
+      cb(fullCanvas.toDataURL('image/png'));
+    }catch(err){
+      cb(dataURL);
+    }
+  };
+  img.onerror=function(){cb(dataURL);};
+  img.src=dataURL;
+}
 // Converts a dataURL to a transparent-background dataURL (PNG-quality via canvas), cb(dataURL, errMessageOrNull)
 function removeImageBackground(dataURL,cb){
   loadBgRemovalLib().then(function(mod){
@@ -1513,7 +1598,7 @@ function removeImageBackground(dataURL,cb){
     });
   }).then(function(resultBlob){
     var fr=new FileReader();
-    fr.onload=function(e){cb(e.target.result,null);};
+    fr.onload=function(e){cleanupBgArtifacts(e.target.result,function(cleanedDataURL){cb(cleanedDataURL,null);});};
     fr.onerror=function(){cb(dataURL,'read failed');};
     fr.readAsDataURL(resultBlob);
   }).catch(function(err){
@@ -1919,6 +2004,7 @@ function renderProds(){
       +'<div class="pcard-name">'+esc(p.name)+'</div>'
       +'<div class="pcard-sku">'+esc(p.sku||'—')+'</div>'
       +'<div class="pcard-row"><span class="pcard-price">₹'+p.price+'</span></div>'
+      +(function(){var szArr=p.sizes?String(p.sizes).split(/[,\/]/).map(function(s){return s.trim();}).filter(Boolean):[];if(!szArr.length)return'';if(p.sellType==='piece'){return'<div class="pcard-moq">MOQ '+(p.moq||1)+' Pc(s) · Sizes: '+esc(szArr.join(', '))+'</div>';}return'<div class="pcard-moq">MOQ '+(p.moq||1)+' Set(s) · '+szArr.length+' Pcs/Set ('+esc(szArr.join(', '))+')</div>';})()
       +'<div class="pcard-edit-bar"><button class="btn-sm-edit" onclick="openProdModal('+p.id+')" style="flex:1">✏️ Edit</button><button class="btn-sm-del" onclick="delProd('+p.id+')" style="flex:1">🗑 Delete</button></div>'
       +'<div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.03);border:1px solid rgba(201,162,39,.08);border-radius:4px;padding:6px 10px">'
       +'<span style="font-size:10px;color:rgba(245,237,214,.45);font-weight:600">🌐 Show on Website</span>'
@@ -1948,7 +2034,10 @@ function openProdModal(id){
     document.getElementById('pn').value=p.name;
     document.getElementById('pc').value=p.cat;
     document.getElementById('pp').value=p.price;
-    document.getElementById('pm').value=p.moq;
+    document.getElementById('pm').value=p.moq||1;
+    document.getElementById('psellType').value=p.sellType||'set';
+    onSellTypeChange();
+    document.getElementById('psize').value=p.sizes||'';
     document.getElementById('psk').value=p.sku||'';
     document.getElementById('pb').value=p.badge||'';
     document.getElementById('pstock').value=p.stock||'instock';
@@ -1963,23 +2052,74 @@ function openProdModal(id){
   } else {
     document.getElementById('prodModalTitle').textContent='Add New Product';
     document.getElementById('pid').value='';
-    ['pn','psk','pd'].forEach(function(x){document.getElementById(x).value=''});
+    ['pn','pd','psize'].forEach(function(x){document.getElementById(x).value=''});
     var catSelect=document.getElementById('pc');if(catSelect&&catSelect.options.length>0)catSelect.value=catSelect.options[0].value;
     document.getElementById('pp').value='';
-    document.getElementById('pm').value='';
+    document.getElementById('pm').value='1';
+    document.getElementById('psellType').value='set';
+    onSellTypeChange();
     document.getElementById('pb').value='';
     document.getElementById('pstock').value='instock';
     currentPhotosData=[];
+    document.getElementById('psk').value=getNextSku(catSelect?catSelect.value:'');
   }
   openMod('prodModal');
 }
 
+// ══ SKU AUTO-INCREMENT ══
+// Suggests the next SKU number automatically: takes the highest number already
+// used (preferring the same category's prefix pattern, e.g. TJC-DJ-022 -> TJC-DJ-023)
+// and falls back to the highest number used anywhere if the category has no SKUs yet.
+function getNextSku(catId){
+  var prods=getProds();
+  var re=/^(.*?)(\d+)$/; // splits into a non-numeric prefix + trailing number
+  var bestInCat=null,bestOverall=null;
+  prods.forEach(function(p){
+    if(!p.sku)return;
+    var m=String(p.sku).trim().match(re);
+    if(!m)return;
+    var num=parseInt(m[2],10);
+    var entry={prefix:m[1],num:num,digits:m[2].length};
+    if(!bestOverall||num>bestOverall.num)bestOverall=entry;
+    if(p.cat===catId&&(!bestInCat||num>bestInCat.num))bestInCat=entry;
+  });
+  var pick=bestInCat||bestOverall;
+  if(!pick)return '';
+  var nextNum=pick.num+1;
+  var padded=String(nextNum);
+  while(padded.length<pick.digits)padded='0'+padded;
+  return pick.prefix+padded;
+}
+// When adding a NEW product (not editing) and category changes, refresh the SKU suggestion
+// Toggles MOQ label + Sizes label wording between Set-wise and Piece-wise selling
+function onSellTypeChange(){
+  var st=document.getElementById('psellType').value;
+  var pmLabel=document.getElementById('pmLabel');
+  var szLabel=document.getElementById('pszLabel');
+  var szHint=document.getElementById('pszHint');
+  if(st==='piece'){
+    if(pmLabel)pmLabel.textContent='MOQ (Pcs)';
+    if(szLabel)szLabel.textContent='Available Sizes';
+    if(szHint)szHint.textContent='(comma separated — har size individually piece-wise order ho sakta hai)';
+  } else {
+    if(pmLabel)pmLabel.textContent='MOQ (Sets)';
+    if(szLabel)szLabel.textContent='Set Sizes';
+    if(szHint)szHint.textContent='(comma separated — ye hi 1 Set banate hain, e.g. 6 sizes = 1 Set of 6 Pcs)';
+  }
+}
+
+function onProdCatChangeForSku(){
+  if(document.getElementById('pid').value)return; // don't touch SKU while editing an existing product
+  document.getElementById('psk').value=getNextSku(document.getElementById('pc').value);
+}
+
 function saveProd(){
+  try{
   var name=document.getElementById('pn').value.trim();
   var price=parseInt(document.getElementById('pp').value)||0;
-  var moq=parseInt(document.getElementById('pm').value)||0;
+  var moq=parseInt(document.getElementById('pm').value)||1;
   if(!name){toast('Product name required','err');return}
-  var prods=getProds();
+  var prods=getProds().slice(); // work on a fresh copy so we never mutate a shared/default reference in place
   var eid=document.getElementById('pid').value;
   var urlVal=document.getElementById('pphoto').value.trim();
   if(urlVal)currentPhotosData.push(urlVal);
@@ -1988,6 +2128,8 @@ function saveProd(){
     id:eid?parseInt(eid):Date.now(),
     name:name,cat:document.getElementById('pc').value,
     price:price,moq:moq,
+    sellType:document.getElementById('psellType').value||'set',
+    sizes:document.getElementById('psize').value.trim(),
     sku:document.getElementById('psk').value.trim(),
     badge:document.getElementById('pb').value,
     stock:document.getElementById('pstock').value||'instock',
@@ -1995,16 +2137,26 @@ function saveProd(){
     photo:photosFinal[0]||'',
     desc:document.getElementById('pd').value.trim()
   };
-  if(eid){var idx=prods.findIndex(function(x){return x.id===parseInt(eid)});if(idx>=0){p.featured=prods[idx].featured;prods[idx]=p;}else prods.push(p)}
-  else prods.push(p);
+  var wasEdit=false;
+  if(eid){
+    var idx=prods.findIndex(function(x){return x.id===parseInt(eid)});
+    if(idx>=0){p.featured=(prods[idx].featured===false?false:true);prods[idx]=p;wasEdit=true;}
+    else prods.push(p);
+  } else {
+    prods.push(p);
+  }
 
   setProds(prods); // saves to IndexedDB (no 5MB limit) + Firebase
   renderProds();updateDash();
   closeMod('prodModal');
-  toast(eid?'Product updated! ✅':'Product added! ✅','ok');
-  logActivity(eid?'Updated product "'+name+'"':'Added product "'+name+'"');
+  toast(wasEdit?'Product updated! ✅':'Product added! ✅','ok');
+  logActivity(wasEdit?'Updated product "'+name+'"':'Added product "'+name+'"');
   var la=document.getElementById('lastAdded');
   if(la)la.textContent='Last added: '+name;
+  }catch(err){
+    console.error('saveProd failed:',err);
+    toast('❌ Save failed: '+(err&&err.message?err.message:'unknown error'),'err');
+  }
 }
 
 function delProd(id){
@@ -2048,16 +2200,16 @@ function deleteAllProducts(){
 
 function resetProds(){
   if(!confirm('Reset to 6 default products?'))return;
-  setProds(DEF_PRODS);renderProds();updateDash();toast('Products reset to default','ok');
+  setProds(JSON.parse(JSON.stringify(DEF_PRODS)));renderProds();updateDash();toast('Products reset to default','ok');
   logActivity('Reset products to default');
 }
 
 // ══ BULK CSV UPLOAD ══
 function downloadCsvTemplate(){
   var cats=getCats();
-  var header='name,category,price,moq,sku,badge,stock,description,photo_url\n';
-  var sample='Slim Fit Jeans,'+(cats[0]?cats[0].id:'jeans')+',350,50,TJC-DJ-100,Hot,instock,Premium stretch denim,https://example.com/photo.jpg\n';
-  var note='# category must match one of these IDs: '+cats.map(function(c){return c.id;}).join(', ')+'\n# badge: Hot / New / Top / (leave blank for none)\n# stock: instock / outofstock\n';
+  var header='name,category,price,moq,sell_type,sizes,sku,badge,stock,description,photo_url\n';
+  var sample='Slim Fit Jeans,'+(cats[0]?cats[0].id:'jeans')+',350,1,set,28/30/32/34/36/38,TJC-DJ-100,Hot,instock,Premium stretch denim,https://example.com/photo.jpg\n';
+  var note='# category must match one of these IDs: '+cats.map(function(c){return c.id;}).join(', ')+'\n# sell_type: set (sold in sets) or piece (sold per single piece) — default set\n# moq is in Sets if sell_type=set, or in Pcs if sell_type=piece (default 1)\n# sizes: use / to separate (NOT comma). If sell_type=set, these sizes = 1 Set (e.g. 6 sizes = 1 Set of 6 Pcs); if sell_type=piece, these are just the available sizes. Shown to visitors, e.g. S/M/L/XL or 28/30/32\n# badge: Hot / New / Top / (leave blank for none)\n# stock: instock / outofstock\n';
   var csv=note+header+sample;
   var blob=new Blob([csv],{type:'text/csv'});
   var a=document.createElement('a');
@@ -2098,6 +2250,7 @@ function handleBulkCsv(input){
       var cat=r.category&&validCatIds.indexOf(r.category)>=0?r.category:(validCatIds[0]||'jeans');
       var price=parseInt(r.price);
       var moq=parseInt(r.moq)||1;
+      var sellType=(r.sell_type||'').trim().toLowerCase()==='piece'?'piece':'set';
       // price optional - skip removed
       prods.push({
         id:Date.now()+added,
@@ -2105,6 +2258,8 @@ function handleBulkCsv(input){
         cat:cat,
         price:price,
         moq:moq,
+        sellType:sellType,
+        sizes:r.sizes||'',
         sku:r.sku||'',
         badge:['Hot','New','Top'].indexOf(r.badge)>=0?r.badge:'',
         stock:r.stock==='outofstock'?'outofstock':'instock',
@@ -2543,7 +2698,7 @@ function buildWebsiteHTML(){
   var heroImages=[heroImg].concat(cats.map(function(c){return c.photo;})).filter(function(u,i,arr){return u&&arr.indexOf(u)===i;});
 
   // Embed ALL products + categories for client-side category filtering
-  var embeddedAllProds=JSON.stringify(prods.map(function(p){return {name:p.name,cat:p.cat,priceLabel:fromPriceLabel(p.price),sku:p.sku,badge:p.badge,photo:p.photo,photos:p.photos||[],stock:p.stock,moq:p.moq||'',desc:p.desc||''};}));
+  var embeddedAllProds=JSON.stringify(prods.map(function(p){return {name:p.name,cat:p.cat,priceLabel:fromPriceLabel(p.price),sku:p.sku,badge:p.badge,photo:p.photo,photos:p.photos||[],stock:p.stock,moq:p.moq||'',sellType:p.sellType||'set',sizes:p.sizes||'',desc:p.desc||''};}));
   var embeddedCats=JSON.stringify(cats.map(function(c){return {id:c.id,name:c.name};}));
 
   return '<!DOCTYPE html>\n<html lang="en">\n<head>'
@@ -2660,6 +2815,7 @@ function buildWebsiteHTML(){
     +'\n.prod-name{font-size:12px;margin-bottom:4px}'
     +'\n.prod-price{font-size:12px;color:#000;margin-bottom:2px}'
     +'\n.prod-moq{font-size:11px;color:#888}'
+    +'\n.prod-sizes{font-size:10.5px;color:#888;margin-bottom:6px;letter-spacing:.3px}'
     +'\n.enq-sec{background:#000;color:#fff;padding:80px 24px}'
     +'\n.enq-inner{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:80px}'
     +'\n.enq-left h2{font-size:clamp(28px,4vw,48px);font-weight:300;letter-spacing:-1px;line-height:1.1;margin-bottom:20px}'
@@ -2858,6 +3014,9 @@ function buildWebsiteHTML(){
     +'\n.qv-name::after{content:\'\';position:absolute;left:0;bottom:0;width:46px;height:2px;background:#C9A227}'
     +'\n.qv-specs{display:flex;flex-wrap:wrap;align-items:center;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#948f80;margin-bottom:24px;font-weight:600}'
     +'\n.qv-specs span:not(:first-child)::before{content:"\\2022";margin:0 10px;color:#C9A227}'
+    +'\n.qv-sizes-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#948f80;font-weight:700;margin-bottom:8px}'
+    +'\n.qv-sizes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}'
+    +'\n.qv-size-chip{border:1px solid #ddd;background:#fff;color:#111;font-size:12px;font-weight:600;padding:6px 13px;border-radius:3px;letter-spacing:.5px}'
     +'\n.qv-price-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#948f80;font-weight:700;margin-bottom:5px}'
     +'\n.qv-price{font-family:\'Playfair Display\',serif;font-size:30px;font-weight:700;color:#C9A227;margin-bottom:20px}'
     +'\n.qv-stock-in{display:inline-flex;align-items:center;gap:5px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#1f7a3d;background:#e7f5ec;padding:6px 14px;border-radius:20px;margin-bottom:26px;font-weight:700;width:fit-content}'
@@ -3086,9 +3245,9 @@ function buildWebsiteHTML(){
     +'\nfunction addToCartFromQv(idx){var el=document.getElementById("qvQtyInput");var qty=el?(parseInt(el.value,10)||1):1;addToCart(idx,qty);}'
     +'\nfunction removeFromCart(idx){var cart=getCart().filter(function(i){return i.idx!==idx;});saveCart(cart);renderCartPanel();}'
     +'\nfunction changeCartQty(idx,delta){var cart=getCart();var item=cart.find(function(i){return i.idx===idx;});if(!item)return;item.qty+=delta;if(item.qty<=0){cart=cart.filter(function(i){return i.idx!==idx;});}saveCart(cart);renderCartPanel();}'
-    +'\nfunction renderCartPanel(){var body=document.getElementById("cartBody");if(!body)return;var cart=getCart();var foot=document.getElementById("cartFoot");if(!cart.length){body.innerHTML=\'<div class="cart-empty">Aapka cart khali hai.<br>Products browse karke &quot;Add to Cart&quot; karein.</div>\';if(foot)foot.style.display="none";return;}if(foot)foot.style.display="flex";body.innerHTML=cart.map(function(i){return \'<div class="cart-item"><div class="cart-item-img">\'+(i.photo?\'<img src="\'+i.photo+\'">\':\'<span>\'+(i.name||"P").charAt(0)+\'</span>\')+\'</div><div class="cart-item-info"><p class="cart-item-name">\'+i.name+\'</p><p class="cart-item-price">\'+(i.priceLabel||"Enquire for Price")+\'</p><div class="cart-item-qty"><button onclick="changeCartQty(\'+i.idx+\',-1)">&minus;</button><span>\'+i.qty+\'</span><button onclick="changeCartQty(\'+i.idx+\',1)">+</button></div></div><button class="cart-item-remove" onclick="removeFromCart(\'+i.idx+\')" title="Remove">&times;</button></div>\';}).join("");}'
+    +'\nfunction renderCartPanel(){var body=document.getElementById("cartBody");if(!body)return;var cart=getCart();var foot=document.getElementById("cartFoot");if(!cart.length){body.innerHTML=\'<div class="cart-empty">Aapka cart khali hai.<br>Products browse karke &quot;Add to Cart&quot; karein.</div>\';if(foot)foot.style.display="none";return;}if(foot)foot.style.display="flex";body.innerHTML=cart.map(function(i){var cp=ALLPRODS[i.idx];var unit=(cp&&cp.sellType==="piece")?"Pc(s)":"Set(s)";return \'<div class="cart-item"><div class="cart-item-img">\'+(i.photo?\'<img src="\'+i.photo+\'">\':\'<span>\'+(i.name||"P").charAt(0)+\'</span>\')+\'</div><div class="cart-item-info"><p class="cart-item-name">\'+i.name+\'</p><p class="cart-item-price">\'+(i.priceLabel||"Enquire for Price")+\'</p><div class="cart-item-qty"><button onclick="changeCartQty(\'+i.idx+\',-1)">&minus;</button><span>\'+i.qty+\' \'+unit+\'</span><button onclick="changeCartQty(\'+i.idx+\',1)">+</button></div></div><button class="cart-item-remove" onclick="removeFromCart(\'+i.idx+\')" title="Remove">&times;</button></div>\';}).join("");}'
     +'\nfunction toggleCart(){var p=document.getElementById("cartPanel");if(!p)return;p.classList.toggle("open");document.body.style.overflow=p.classList.contains("open")?"hidden":"";if(p.classList.contains("open"))renderCartPanel();}'
-    +'\nfunction checkoutCart(){var cart=getCart();if(!cart.length)return;var lines=cart.map(function(i){return "- "+i.name+(i.sku?" (SKU: "+i.sku+")":"")+" x"+i.qty;});var msg=encodeURIComponent("Hi TJC! I want to order:\\n"+lines.join("\\n")+"\\n\\nPlease share pricing and availability.");window.open("https://wa.me/"+PHONE+"?text="+msg,"_blank");}'
+    +'\nfunction checkoutCart(){var cart=getCart();if(!cart.length)return;var lines=cart.map(function(i){var cp=ALLPRODS[i.idx];var unit=(cp&&cp.sellType==="piece")?"Pc(s)":"Set(s)";return "- "+i.name+(i.sku?" (SKU: "+i.sku+")":"")+" x"+i.qty+" "+unit;});var msg=encodeURIComponent("Hi TJC! I want to order:\\n"+lines.join("\\n")+"\\n\\nPlease share pricing and availability.");window.open("https://wa.me/"+PHONE+"?text="+msg,"_blank");}'
     +'\nupdateCartBadge();'
     +'\nvar _chatStarted=false;'
     +'\nvar _chatHistory=[];'
@@ -3116,7 +3275,7 @@ function buildWebsiteHTML(){
     +'\n_mutObs.observe(document.body,{childList:true,subtree:true});'
     +'\n})();'
     +'\nvar _qvProds=ALLPRODS;'
-    +'\nfunction prodCardHTML(p){var oos=p.stock==="outofstock";var img=p.photo?\'<img src="\'+p.photo+\'" alt="\'+p.name+\'" onerror="this.style.display=\\\'none\\\'">\':\'<div class="no-img"><span>\'+(p.name||"P").charAt(0)+\'</span></div>\';var pc=(p.photos&&p.photos.length>1)?\'<span class="prod-photo-count">📷 \'+p.photos.length+\'</span>\':"";var idx=ALLPRODS.indexOf(p);if(idx<0){idx=ALLPRODS.findIndex(function(x){return x.sku&&x.sku===p.sku;});}if(idx<0){idx=ALLPRODS.findIndex(function(x){return x.name===p.name;});}if(oos){return \'<div class="prod-item anim-item anim-oos"><div class="prod-img">\'+img+\'<span class="prod-badge" style="background:#000;color:#fff">Out of Stock</span></div><div class="prod-info"><p class="prod-name">\'+p.name+\'</p><p class="prod-price">Currently Unavailable</p></div></div>\';}return \'<div class="prod-item anim-item" style="cursor:pointer" onclick="openQv(\'+idx+\')"><div class="prod-img">\'+img+(p.badge?\'<span class="prod-badge">\'+p.badge+\'</span>\':"")+pc+\'<div class="prod-hover"><span>QUICK VIEW</span></div></div><div class="prod-info"><p class="prod-name">\'+p.name+\'</p><p class="prod-price">\'+(p.priceLabel||"Enquire for Price")+\'</p><button class="prod-add-cart" onclick="event.stopPropagation();addToCart(\'+idx+\')">Add to Cart</button></div></div>\';}'
+    +'\nfunction prodCardHTML(p){try{var oos=p.stock==="outofstock";var img=p.photo?\'<img src="\'+p.photo+\'" alt="\'+p.name+\'" onerror="this.style.display=\\\'none\\\'">\':\'<div class="no-img"><span>\'+(p.name||"P").charAt(0)+\'</span></div>\';var pc=(p.photos&&p.photos.length>1)?\'<span class="prod-photo-count">📷 \'+p.photos.length+\'</span>\':"";var idx=ALLPRODS.indexOf(p);if(idx<0){idx=ALLPRODS.findIndex(function(x){return x.sku&&x.sku===p.sku;});}if(idx<0){idx=ALLPRODS.findIndex(function(x){return x.name===p.name;});}var szArr=p.sizes?String(p.sizes).split(/[,\/]/).map(function(s){return s.trim();}).filter(Boolean):[];if(oos){return \'<div class="prod-item anim-item anim-oos"><div class="prod-img">\'+img+\'<span class="prod-badge" style="background:#000;color:#fff">Out of Stock</span></div><div class="prod-info"><p class="prod-name">\'+p.name+\'</p><p class="prod-price">Currently Unavailable</p></div></div>\';}return \'<div class="prod-item anim-item" style="cursor:pointer" onclick="openQv(\'+idx+\')"><div class="prod-img">\'+img+(p.badge?\'<span class="prod-badge">\'+p.badge+\'</span>\':"")+pc+\'<div class="prod-hover"><span>QUICK VIEW</span></div></div><div class="prod-info"><p class="prod-name">\'+p.name+\'</p><p class="prod-price">\'+(p.priceLabel||"Enquire for Price")+\'</p>\'+(szArr.length?(p.sellType==="piece"?\'<p class="prod-sizes">Sold per Piece</p><p class="prod-moq">Sizes: \'+szArr.join(", ")+\'</p>\':\'<p class="prod-sizes">1 Set = \'+szArr.length+\' Pcs</p><p class="prod-moq">Sizes: \'+szArr.join(", ")+\'</p>\'):"")+\'<button class="prod-add-cart" onclick="event.stopPropagation();addToCart(\'+idx+\')">Add to Cart</button></div></div>\';}catch(e){console.warn("TJC: card render failed for",p&&p.name,e);return \'<div class="prod-item anim-item"><div class="prod-info"><p class="prod-name">\'+((p&&p.name)||"Product")+\'</p></div></div>\';}}'
     +'\nvar _qvIdx=0;'
     +'\nfunction openQv(idx){'
     +'\nvar p=ALLPRODS[idx];if(!p)return;'
@@ -3141,17 +3300,21 @@ function buildWebsiteHTML(){
     +'\nvar waMsg=encodeURIComponent(\'Hi TJC! Enquiry about "\'+p.name+\'" SKU:\'+(p.sku||"N/A")+(p.priceLabel?\' (Price: \'+p.priceLabel+\')\':"")+\'. Please share details.\');'
     +'\nvar waBtnHtml=oos?"":\'<a class="qv-wa-btn" href="https://wa.me/\'+PHONE+\'?text=\'+waMsg+\'" target="_blank"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>Enquire on WhatsApp</a>\';'
     +'\nvar addCartBtnHtml=oos?"":\'<button class="qv-add-cart-btn" onclick="addToCartFromQv(\'+idx+\')">Add to Cart</button>\';'
-    +'\nvar qtyStepperHtml=oos?"":\'<div class="qv-qty-row"><span class="qv-qty-label">Qty</span><div class="qv-qty-stepper"><button onclick="qvChangeQty(-1)">&minus;</button><input type="text" id="qvQtyInput" value="1" readonly><button onclick="qvChangeQty(1)">+</button></div></div>\';'
+    +'\nvar qtyStepperHtml=oos?"":\'<div class="qv-qty-row"><span class="qv-qty-label">\'+(p.sellType==="piece"?"Pcs":"Sets")+\'</span><div class="qv-qty-stepper"><button onclick="qvChangeQty(-1)">&minus;</button><input type="text" id="qvQtyInput" value="1" readonly><button onclick="qvChangeQty(1)">+</button></div></div>\';'
     +'\nvar catObj=(typeof CATS!=="undefined"?CATS:[]).find(function(c){return c.id===p.cat;});'
     +'\nvar crumbHtml=\'<div class="qv-crumb">\'+(catObj?(catObj.name||"")+\' <span>&rsaquo;</span> \':\'\')+(p.name||"")+\'</div>\';'
     +'\nvar ih="";'
     +'\nih+=crumbHtml;'
     +'\nif(p.badge)ih+=\'<span class="qv-badge">\'+p.badge+\'</span>\';'
     +'\nih+=\'<h2 class="qv-name">\'+(p.name||"")+\'</h2>\';'
+    +'\nvar sizeArr=p.sizes?String(p.sizes).split(/[,/]/).map(function(s){return s.trim();}).filter(Boolean):[];'
+    +'\nvar pcsPerSet=sizeArr.length||1;'
     +'\nvar specsHtml="";'
     +'\nif(p.sku)specsHtml+=\'<span>SKU \'+p.sku+\'</span>\';'
-    +'\nif(p.moq)specsHtml+=\'<span>MOQ \'+p.moq+\'</span>\';'
+    +'\nif(p.moq)specsHtml+=\'<span>MOQ \'+p.moq+(p.sellType==="piece"?\' Pc(s)\':\' Set(s)\')+\'</span>\';'
+    +'\nif(sizeArr.length&&p.sellType!=="piece")specsHtml+=\'<span>1 Set = \'+pcsPerSet+\' Pcs</span>\';'
     +'\nif(specsHtml)ih+=\'<div class="qv-specs">\'+specsHtml+\'</div>\';'
+    +'\nif(sizeArr.length){ih+=\'<div class="qv-sizes-label">\'+(p.sellType==="piece"?"Available Sizes":"1 Set Contains ("+pcsPerSet+" Pcs)")+\'</div><div class="qv-sizes">\'+sizeArr.map(function(s){return \'<span class="qv-size-chip">\'+s+\'</span>\';}).join(\'\')+\'</div>\';}'
     +'\nif(p.priceLabel)ih+=\'<p class="qv-price-label">Wholesale Price</p><p class="qv-price">\'+(p.priceLabel)+\'</p>\';'
     +'\nih+=\'<div>\'+stockBadge+\'</div>\';'
     +'\nif(p.desc)ih+=\'<div class="qv-desc-label">About This Style</div><p class="qv-desc">\'+(p.desc||"")+\'</p>\';'
