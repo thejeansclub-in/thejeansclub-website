@@ -671,6 +671,18 @@ Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me disp
 <div class="toast" id="toast"></div>
 
 <script>
+// ══ SAVE / COPY PROTECTION ══
+document.addEventListener("contextmenu",function(e){e.preventDefault();});
+document.addEventListener("keydown",function(e){
+  var k=e.key?e.key.toLowerCase():"";
+  if(e.key==="F12"){e.preventDefault();return false;}
+  if((e.ctrlKey||e.metaKey)&&(k==="s"||k==="u"||k==="p")){e.preventDefault();return false;}
+  if((e.ctrlKey||e.metaKey)&&e.shiftKey&&(k==="i"||k==="j"||k==="c")){e.preventDefault();return false;}
+});
+document.addEventListener("copy",function(e){e.preventDefault();});
+document.addEventListener("cut",function(e){e.preventDefault();});
+document.addEventListener("dragstart",function(e){if(e.target&&e.target.tagName==="IMG")e.preventDefault();});
+
 // ══ FIREBASE CONFIG ══
 var FB_CONFIG={
   apiKey:"AIzaSyCbrej21968UxvwEJRp8T1JUfzgMOJAAOA",
