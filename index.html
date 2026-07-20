@@ -711,13 +711,77 @@ function onFbReady(fn){if(FB_READY)fn();else FB_CALLBACKS.push(fn);}
 })();
 
 // ══ CLOUDFLARE R2 IMAGE STORAGE (free tier) ══
-// Worker URL + secret key Settings page se save hote hain (localStorage me).
+// Worker URL + secret key ab Firebase 'tjc/cfConfig' me save hote hain (sabhi devices pe sync),
+// localStorage sirf fast synchronous local cache ke liye rakha hai.
+var CF_CFG_CACHE=null;
 function getCfCfg(){
-  try{return JSON.parse(localStorage.getItem('tjc_cf_cfg')||'{}');}catch(e){return {};}
+  if(CF_CFG_CACHE)return CF_CFG_CACHE;
+  try{CF_CFG_CACHE=JSON.parse(localStorage.getItem('tjc_cf_cfg')||'{}');}catch(e){CF_CFG_CACHE={};}
+  return CF_CFG_CACHE;
 }
 function setCfCfg(cfg){
-  localStorage.setItem('tjc_cf_cfg',JSON.stringify(cfg));
+  CF_CFG_CACHE=cfg;
+  try{localStorage.setItem('tjc_cf_cfg',JSON.stringify(cfg));}catch(e){}
+  try{
+    if(typeof firebase!=='undefined'&&firebase.apps&&firebase.apps.length){
+      var ts=Date.now();
+      firebase.database().ref('tjc/cfConfig').set(cfg).catch(function(){});
+      firebase.database().ref('tjc/cfConfig_ts').set(ts).catch(function(){});
+      try{localStorage.setItem('tjc_cf_cfg_ts',String(ts));}catch(e){}
+    }
+  }catch(e){}
 }
+// Firebase se latest config khinch ke local cache update karo (agar cloud copy naya hai)
+function syncCfCfgFromCloud(cb){
+  if(!DB){if(cb)cb();return;}
+  DB.ref('tjc/cfConfig_ts').once('value',function(tsSnap){
+    var cloudTs=tsSnap.val();
+    var localTs=Number(localStorage.getItem('tjc_cf_cfg_ts')||0);
+    if(cloudTs!==null&&cloudTs!==undefined&&Number(cloudTs)>localTs){
+      DB.ref('tjc/cfConfig').once('value',function(snap){
+        var val=snap.val();
+        if(val){
+          CF_CFG_CACHE=val;
+          try{
+            localStorage.setItem('tjc_cf_cfg',JSON.stringify(val));
+            localStorage.setItem('tjc_cf_cfg_ts',String(cloudTs));
+          }catch(e){}
+        }
+        if(cb)cb();
+      },function(){if(cb)cb();});
+    } else {
+      if(cb)cb();
+    }
+  },function(){if(cb)cb();});
+}
+// Real-time listener — kisi doosre device se save hote hi yahan turant update ho jaye
+var _cfCfgListenerStarted=false;
+function startCfCfgRealtimeListener(){
+  if(!DB||_cfCfgListenerStarted)return;
+  _cfCfgListenerStarted=true;
+  DB.ref('tjc/cfConfig').on('value',function(snap){
+    var val=snap.val();
+    if(!val)return;
+    DB.ref('tjc/cfConfig_ts').once('value',function(tsSnap){
+      var cloudTs=tsSnap.val();
+      var localTs=Number(localStorage.getItem('tjc_cf_cfg_ts')||0);
+      if(cloudTs===null||cloudTs===undefined||Number(cloudTs)>=localTs){
+        CF_CFG_CACHE=val;
+        try{
+          localStorage.setItem('tjc_cf_cfg',JSON.stringify(val));
+          if(cloudTs!==null&&cloudTs!==undefined)localStorage.setItem('tjc_cf_cfg_ts',String(cloudTs));
+        }catch(e){}
+        loadCfSettingsUI(); // agar Settings panel khula hai toh fields turant refresh ho jayein
+      }
+    });
+  });
+}
+onFbReady(function(){
+  syncCfCfgFromCloud(function(){
+    loadCfSettingsUI();
+    startCfCfgRealtimeListener();
+  });
+});
 function cfConfigured(){
   var c=getCfCfg();
   return !!(c.workerUrl&&c.secret);
