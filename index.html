@@ -527,6 +527,7 @@ Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me disp
           <button class="savebtn" onclick="exportData()" style="display:block;width:100%;text-align:left;margin-bottom:8px">📤 Export All Data (JSON)</button>
           <label class="savebtn" style="display:block;width:100%;text-align:left;margin-bottom:8px;cursor:pointer">📥 Import Backup (JSON)<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
           <button class="savebtn" onclick="pushAllToFirebase()" style="display:block;width:100%;text-align:left;margin-bottom:8px;color:#60a5fa;border-color:rgba(96,165,250,.3)">☁️ Force Sync All Data to Firebase</button>
+          <button class="savebtn" onclick="cleanFirebaseBase64Photos()" style="display:block;width:100%;text-align:left;margin-bottom:8px;color:#fbbf24;border-color:rgba(251,191,36,.3)">🧹 Scan &amp; Remove Base64 Photos from Firebase</button>
           <button class="savebtn" onclick="resetProds()" style="display:block;width:100%;text-align:left;margin-bottom:8px">🔄 Reset Default Products</button>
           <button class="savebtn" onclick="clearAllEnq()" style="display:block;width:100%;text-align:left;color:#ff6b6b;border-color:rgba(204,41,54,.3)">🗑 Clear All Enquiries</button>
         </div>
@@ -726,6 +727,7 @@ function onFbReady(fn){if(FB_READY)fn();else FB_CALLBACKS.push(fn);}
 // Worker URL + secret key ab Firebase 'tjc/cfConfig' me save hote hain (sabhi devices pe sync),
 // localStorage sirf fast synchronous local cache ke liye rakha hai.
 var CF_CFG_CACHE=null;
+var CF_CFG_SYNCED=false; // true jab tak Firebase se R2 config ek baar sync ho chuka ho is session me
 function getCfCfg(){
   if(CF_CFG_CACHE)return CF_CFG_CACHE;
   try{CF_CFG_CACHE=JSON.parse(localStorage.getItem('tjc_cf_cfg')||'{}');}catch(e){CF_CFG_CACHE={};}
@@ -745,7 +747,7 @@ function setCfCfg(cfg){
 }
 // Firebase se latest config khinch ke local cache update karo (agar cloud copy naya hai)
 function syncCfCfgFromCloud(cb){
-  if(!DB){if(cb)cb();return;}
+  if(!DB){CF_CFG_SYNCED=true;if(cb)cb();return;}
   DB.ref('tjc/cfConfig_ts').once('value',function(tsSnap){
     var cloudTs=tsSnap.val();
     var localTs=Number(localStorage.getItem('tjc_cf_cfg_ts')||0);
@@ -759,12 +761,23 @@ function syncCfCfgFromCloud(cb){
             localStorage.setItem('tjc_cf_cfg_ts',String(cloudTs));
           }catch(e){}
         }
+        CF_CFG_SYNCED=true;
         if(cb)cb();
-      },function(){if(cb)cb();});
+      },function(){CF_CFG_SYNCED=true;if(cb)cb();});
     } else {
+      CF_CFG_SYNCED=true;
       if(cb)cb();
     }
-  },function(){if(cb)cb();});
+  },function(){CF_CFG_SYNCED=true;if(cb)cb();});
+}
+// Photo upload shuru karne se pehle ye guarantee karta hai ki Firebase se R2 config
+// (agar kisi doosre device/browser se set ki gayi ho) load ho chuki hai — warna
+// cfConfigured() galat 'false' de sakta hai aur photo silently base64 me chali jaati hai.
+function ensureCfCfgLoaded(cb){
+  if(CF_CFG_SYNCED){cb();return;}
+  onFbReady(function(){syncCfCfgFromCloud(cb);});
+  // Safety timeout — agar Firebase load hone me zyada time laga to 2.5s baad bhi aage badho
+  setTimeout(function(){if(!CF_CFG_SYNCED){CF_CFG_SYNCED=true;cb();}},2500);
 }
 // Real-time listener — kisi doosre device se save hote hi yahan turant update ho jaye
 var _cfCfgListenerStarted=false;
@@ -797,6 +810,68 @@ onFbReady(function(){
 function cfConfigured(){
   var c=getCfCfg();
   return !!(c.workerUrl&&c.secret);
+}
+// STRICT RULE: product/category/showroom photos must always be R2 URL strings,
+// never inline base64 (data:image/...) — this is a hard block used at every
+// manual "Photo URL" entry point and before every save, so base64 can never
+// reach Firebase no matter how/where it was typed or pasted in.
+function isBase64ImgStr(s){
+  return typeof s==='string'&&s.trim().indexOf('data:image')===0;
+}
+
+// ══ ONE-TIME CLEANUP — scan live Firebase (old data from before the base64
+// block existed can still be sitting there) and strip any inline base64 image
+// found in prods/cats/content_showroom. This is what causes the huge download
+// bandwidth, since every sync re-downloads the whole node to every device. ══
+function cleanFirebaseBase64Photos(){
+  if(!DB){toast('❌ Firebase abhi connected nahi hai','err');return;}
+  if(!confirm('Firebase database me products, categories aur showroom photo scan honge. Jahan bhi base64 image milegi wahan se hata di jayegi (photo blank ho jayega, R2 se dubara upload karna hoga). Continue?'))return;
+  var keysToScan=['prods','cats','content_showroom'];
+  var pending=keysToScan.length,totalStripped=0;
+  function stripDeep(v,counter){
+    if(typeof v==='string')return isBase64ImgStr(v)?(counter.n++,''):v;
+    if(Array.isArray(v))return v.map(function(x){return stripDeep(x,counter);});
+    if(v&&typeof v==='object'){
+      var out={};
+      for(var k in v){if(Object.prototype.hasOwnProperty.call(v,k))out[k]=stripDeep(v[k],counter);}
+      return out;
+    }
+    return v;
+  }
+  toast('🔍 Firebase scan ho raha hai...','ok');
+  keysToScan.forEach(function(k){
+    DB.ref('tjc/'+k).once('value').then(function(snap){
+      var val=snap.val();
+      var counter={n:0};
+      if(val!==null&&val!==undefined){
+        var cleaned=stripDeep(val,counter);
+        if(counter.n>0){
+          totalStripped+=counter.n;
+          S.s(k,cleaned);
+          logActivity(counter.n+' base64 photo(s) removed from Firebase node "'+k+'"');
+        }
+      }
+      pending--;
+      if(pending===0){
+        refreshCatDropdowns();renderProds();renderCats();
+        if(totalStripped===0)toast('✅ Scan complete — Firebase me koi base64 photo nahi mila','ok');
+        else toast('🎉 Cleanup complete — total '+totalStripped+' base64 photo hataye gaye. Ab download bandwidth kam hoga.','ok');
+      }
+    }).catch(function(e){
+      pending--;
+      toast('⚠️ "'+k+'" scan karte waqt error aaya','err');
+      if(pending===0&&totalStripped>0){
+        toast('🎉 Partial cleanup complete — '+totalStripped+' base64 photo hataye gaye.','ok');
+      }
+    });
+  });
+}
+function rejectIfBase64Url(url){
+  if(isBase64ImgStr(url)){
+    toast('❌ Base64 image string allowed nahi hai — sirf R2/http(s) photo URL daalo, ya "Upload Photo" use karo','err');
+    return true;
+  }
+  return false;
 }
 // Convert a dataURL (base64) to a Blob for uploading
 function dataURLtoBlob(dataURL){
@@ -990,6 +1065,23 @@ var S={
   }
 };
 
+// Recursively check if an object/array/string contains an inline base64 image
+// (data:image/...) anywhere. Used as a bandwidth safety net before syncing
+// photo-bearing keys to Firebase — base64 photos are exactly what caused the
+// earlier download-bandwidth blowup, so we never want them silently going up again.
+function _hasBase64Image(v,depth){
+  depth=depth||0;
+  if(depth>6)return false; // safety limit, avoid runaway recursion on odd data
+  if(typeof v==='string')return v.indexOf('data:image')===0;
+  if(Array.isArray(v))return v.some(function(x){return _hasBase64Image(x,depth+1);});
+  if(v&&typeof v==='object'){
+    for(var key in v){if(Object.prototype.hasOwnProperty.call(v,key)&&_hasBase64Image(v[key],depth+1))return true;}
+    return false;
+  }
+  return false;
+}
+var PHOTO_BEARING_KEYS=['prods','cats','content_showroom'];
+
 // ══ PUSH ONE KEY — with auto-retry until it succeeds ══
 function pushKeyToFirebase(k,v,ts){
   if(!DB){
@@ -998,6 +1090,15 @@ function pushKeyToFirebase(k,v,ts){
   }
   // Firebase rejects 'undefined' values anywhere in the object — strip them via JSON round-trip
   try{v=JSON.parse(JSON.stringify(v));}catch(e){}
+  // Bandwidth safety net: photo keys should only ever hold R2 URLs, never inline
+  // base64 images (each base64 photo is ~100-1000x heavier than a URL, and every
+  // edit re-syncs the WHOLE node to every connected device — this is what caused
+  // the earlier 2.25GB/week spike). Warn loudly instead of silently uploading it.
+  if(PHOTO_BEARING_KEYS.indexOf(k)>=0&&_hasBase64Image(v)){
+    if(typeof toast==='function')toast('❌ Sync blocked — "'+k+'" me base64 photo mila. Sirf R2 URL allowed hai. Photo dubara R2 se upload karo.','err');
+    console.warn('pushKeyToFirebase: BLOCKED — base64 image detected in "'+k+'", refusing to sync to Firebase.');
+    return; // hard block: never let base64 leave the device
+  }
   DB.ref('tjc/'+k).set(v).then(function(){
     DB.ref('tjc/'+k+'_ts').set(ts).catch(function(){});
     clearPendingPush(k);
@@ -1525,44 +1626,43 @@ function removePhoto(i){
 function handlePhotoFiles(input){
   var files=Array.prototype.slice.call(input.files||[]);
   if(!files.length)return;
+  var ua=document.getElementById('uploadArea');
+  function setStatus(msg){if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML=msg;}}
+  setStatus('<span style="color:var(--gold)">⏳ Checking storage settings...</span>');
+  ensureCfCfgLoaded(function(){handlePhotoFilesReady(input,files,setStatus,ua);});
+}
+function handlePhotoFilesReady(input,files,setStatus,ua){
   var remaining=files.length;
   var useCf=cfConfigured();
   var removeBg=!!(document.getElementById('autoRemoveBg')&&document.getElementById('autoRemoveBg').checked);
-  var ua=document.getElementById('uploadArea');
-  function setStatus(msg){if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML=msg;}}
+  if(!useCf){
+    setStatus('<span style="color:#f87171">❌ Cloudflare R2 configured nahi hai — pehle Settings me R2 connect karo, tabhi photos upload hongi</span>');
+    toast('❌ R2 configured nahi hai — photo upload block hai. Settings me connect karo.','err');
+    input.value='';
+    return;
+  }
   if(removeBg)setStatus('<span style="color:var(--gold)">✂️ Background hata rahe hain...</span>');
-  else if(useCf)setStatus('<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>');
+  else setStatus('<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>');
   files.forEach(function(file){
     if(file.size>5*1024*1024){toast(file.name+' too large! Max 5MB','err');remaining--;if(remaining===0)input.value='';return;}
     var reader=new FileReader();
     reader.onload=function(e){
       function afterBg(sourceDataURL,hasAlpha){
         compressImage(sourceDataURL,1800,1800,0.92,hasAlpha,function(compressed){
-          if(useCf){
-            if(ua)setStatus('<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>');
-            uploadToCloudflare(compressed,fixFilenameExt(compressed,file.name),function(url,err){
-              if(url){
-                currentPhotosData.push(url);
-              }else{
-                toast('Upload failed ('+file.name+'): '+err+' — saved locally instead','err');
-                currentPhotosData.push(compressed); // fallback so photo isn't lost
-              }
-              renderPhotoGallery();
-              remaining--;
-              if(remaining===0){
-                setStatus('<span style="color:#4ade80">✅ '+currentPhotosData.length+' photo(s) added!</span><br>Click to add more');
-                input.value='';
-              }
-            });
-          }else{
-            currentPhotosData.push(compressed);
+          if(ua)setStatus('<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>');
+          uploadToCloudflare(compressed,fixFilenameExt(compressed,file.name),function(url,err){
+            if(url){
+              currentPhotosData.push(url);
+            }else{
+              toast('❌ Upload failed ('+file.name+'): '+err+' — photo add nahi hui, dubara try karo','err');
+            }
             renderPhotoGallery();
             remaining--;
             if(remaining===0){
               setStatus('<span style="color:#4ade80">✅ '+currentPhotosData.length+' photo(s) added!</span><br>Click to add more');
               input.value='';
             }
-          }
+          });
         });
       }
       if(removeBg){
@@ -1686,6 +1786,7 @@ function addPhotoUrl(){
   var inp=document.getElementById('pphoto');
   var url=inp.value.trim();
   if(!url)return;
+  if(rejectIfBase64Url(url))return;
   currentPhotosData.push(url);
   inp.value='';
   renderPhotoGallery();
@@ -1747,8 +1848,18 @@ function handleCatPhoto(input){
   var file=input.files[0];
   if(!file)return;
   if(file.size>5*1024*1024){toast('File too large! Max 5MB','err');return}
-  var useCf=cfConfigured();
   var ua=document.getElementById('catUploadArea');
+  if(ua){var pt0=ua.querySelector('.photo-upload-text');if(pt0)pt0.innerHTML='<span style="color:var(--gold)">⏳ Checking storage settings...</span>';}
+  ensureCfCfgLoaded(function(){handleCatPhotoReady(input,file,ua);});
+}
+function handleCatPhotoReady(input,file,ua){
+  var useCf=cfConfigured();
+  if(!useCf){
+    if(ua){var pt0=ua.querySelector('.photo-upload-text');if(pt0)pt0.innerHTML='<span style="color:#f87171">❌ Cloudflare R2 configured nahi hai — Settings me connect karo</span>';}
+    toast('❌ R2 configured nahi hai — photo upload block hai. Settings me connect karo.','err');
+    input.value='';
+    return;
+  }
   var reader=new FileReader();
   reader.onload=function(e){
     compressImage(e.target.result,700,700,0.85,false,function(compressed){
@@ -1760,15 +1871,14 @@ function handleCatPhoto(input){
         document.getElementById('cphoto').value='';
         if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:#4ade80">✅ Photo uploaded!</span><br>Click to change';}
       }
-      if(useCf){
-        if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>';}
-        uploadToCloudflare(compressed,fixFilenameExt(compressed,file.name),function(url,err){
-          if(url)applyResult(url);
-          else{toast('Upload failed: '+err+' — saved locally instead','err');applyResult(compressed);}
-        });
-      }else{
-        applyResult(compressed);
-      }
+      if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>';}
+      uploadToCloudflare(compressed,fixFilenameExt(compressed,file.name),function(url,err){
+        if(url)applyResult(url);
+        else{
+          toast('❌ Upload failed: '+err+' — photo add nahi hui, dubara try karo','err');
+          if(ua){var pt2=ua.querySelector('.photo-upload-text');if(pt2)pt2.innerHTML='<span style="color:#f87171">❌ Upload failed — dubara try karo</span>';}
+        }
+      });
     });
   };
   reader.readAsDataURL(file);
@@ -1776,6 +1886,7 @@ function handleCatPhoto(input){
 
 function handleCatUrl(url){
   if(!url)return;
+  if(rejectIfBase64Url(url))return;
   currentCatPhotoData=url;
   var prev=document.getElementById('catPhotoPreview');
   prev.src=url;
@@ -1787,8 +1898,18 @@ function handleSrPhoto(input){
   var file=input.files[0];
   if(!file)return;
   if(file.size>5*1024*1024){toast('File too large! Max 5MB','err');return}
-  var useCf=cfConfigured();
   var ua=document.getElementById('srUploadArea');
+  if(ua){var pt0=ua.querySelector('.photo-upload-text');if(pt0)pt0.innerHTML='<span style="color:var(--gold)">⏳ Checking storage settings...</span>';}
+  ensureCfCfgLoaded(function(){handleSrPhotoReady(input,file,ua);});
+}
+function handleSrPhotoReady(input,file,ua){
+  var useCf=cfConfigured();
+  if(!useCf){
+    if(ua){var pt0=ua.querySelector('.photo-upload-text');if(pt0)pt0.innerHTML='<span style="color:#f87171">❌ Cloudflare R2 configured nahi hai — Settings me connect karo</span>';}
+    toast('❌ R2 configured nahi hai — photo upload block hai. Settings me connect karo.','err');
+    input.value='';
+    return;
+  }
   var reader=new FileReader();
   reader.onload=function(e){
     compressImage(e.target.result,1200,1200,0.88,false,function(compressed){
@@ -1800,15 +1921,14 @@ function handleSrPhoto(input){
         document.getElementById('srPhoto').value='';
         if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:#4ade80">✅ Photo uploaded!</span><br>Click to change';}
       }
-      if(useCf){
-        if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>';}
-        uploadToCloudflare(compressed,fixFilenameExt(compressed,file.name),function(url,err){
-          if(url)applyResult(url);
-          else{toast('Upload failed: '+err+' — saved locally instead','err');applyResult(compressed);}
-        });
-      }else{
-        applyResult(compressed);
-      }
+      if(ua){var pt=ua.querySelector('.photo-upload-text');if(pt)pt.innerHTML='<span style="color:var(--gold)">⏳ Uploading to Cloudflare...</span>';}
+      uploadToCloudflare(compressed,fixFilenameExt(compressed,file.name),function(url,err){
+        if(url)applyResult(url);
+        else{
+          toast('❌ Upload failed: '+err+' — photo add nahi hui, dubara try karo','err');
+          if(ua){var pt2=ua.querySelector('.photo-upload-text');if(pt2)pt2.innerHTML='<span style="color:#f87171">❌ Upload failed — dubara try karo</span>';}
+        }
+      });
     });
   };
   reader.readAsDataURL(file);
@@ -1816,6 +1936,7 @@ function handleSrPhoto(input){
 
 function handleSrUrl(url){
   if(!url)return;
+  if(rejectIfBase64Url(url))return;
   currentSrPhotoData=url;
   var prev=document.getElementById('srPhotoPreview');
   prev.src=url;
@@ -2198,8 +2319,17 @@ function saveProd(){
   var prods=getProds().slice(); // work on a fresh copy so we never mutate a shared/default reference in place
   var eid=document.getElementById('pid').value;
   var urlVal=document.getElementById('pphoto').value.trim();
-  if(urlVal)currentPhotosData.push(urlVal);
+  if(urlVal){
+    if(rejectIfBase64Url(urlVal))return;
+    currentPhotosData.push(urlVal);
+  }
   var photosFinal=currentPhotosData.slice();
+  // Final safety net: never let a base64 photo slip into a saved product,
+  // no matter how it got into currentPhotosData.
+  if(photosFinal.some(isBase64ImgStr)){
+    toast('❌ Product save block — photo(s) me base64 image mila. R2 Upload use karo, base64 allowed nahi.','err');
+    return;
+  }
   var p={
     id:eid?parseInt(eid):Date.now(),
     name:name,cat:document.getElementById('pc').value,
@@ -2321,8 +2451,12 @@ function handleBulkCsv(input){
     var validCatIds=cats.map(function(c){return c.id;});
     var prods=getProds();
     var added=0,skipped=0;
+    var base64Skipped=0;
     rows.forEach(function(r){
       if(!r.name){skipped++;return}
+      // Never accept an inline base64 string via CSV — photo_url must be a real R2/http(s) URL
+      var photoUrl=r.photo_url||'';
+      if(isBase64ImgStr(photoUrl)){photoUrl='';base64Skipped++;}
       var cat=r.category&&validCatIds.indexOf(r.category)>=0?r.category:(validCatIds[0]||'jeans');
       var price=parseInt(r.price);
       var moq=parseInt(r.moq)||1;
@@ -2339,8 +2473,8 @@ function handleBulkCsv(input){
         sku:r.sku||'',
         badge:['Hot','New','Top'].indexOf(r.badge)>=0?r.badge:'',
         stock:r.stock==='outofstock'?'outofstock':'instock',
-        photo:r.photo_url||'',
-        photos:r.photo_url?[r.photo_url]:[],
+        photo:photoUrl,
+        photos:photoUrl?[photoUrl]:[],
         desc:r.description||''
       });
       added++;
@@ -2349,7 +2483,7 @@ function handleBulkCsv(input){
     renderProds();updateDash();
     input.value='';
     if(added)logActivity('Bulk uploaded '+added+' products via CSV'+(skipped?' ('+skipped+' skipped)':''));
-    toast(added+' products added'+(skipped?', '+skipped+' skipped (missing name)':'')+'!',added?'ok':'err');
+    toast(added+' products added'+(skipped?', '+skipped+' skipped (missing name)':'')+(base64Skipped?', '+base64Skipped+' photo_url ignored (base64 not allowed, use R2 URL)':'')+'!',added?'ok':'err');
   };
   reader.readAsText(file);
 }
@@ -2406,6 +2540,7 @@ function saveCat(){
   var cats=getCats();
   var eid=document.getElementById('cid').value;
   var urlVal=document.getElementById('cphoto').value.trim();
+  if(rejectIfBase64Url(currentCatPhotoData)||rejectIfBase64Url(urlVal))return;
   var c={
     id:eid||('cat_'+Date.now()),
     name:name,
@@ -2544,6 +2679,7 @@ function saveC(sec){
     d={s1v:document.getElementById('s1v').value,s1l:document.getElementById('s1l').value,s2v:document.getElementById('s2v').value,s2l:document.getElementById('s2l').value,s3v:document.getElementById('s3v').value,s3l:document.getElementById('s3l').value,rtVal:document.getElementById('rtVal').value,rtLabel:document.getElementById('rtLabel').value};
   } else if(sec==='showroom'){
     var srUrlVal=document.getElementById('srPhoto').value.trim();
+    if(rejectIfBase64Url(currentSrPhotoData)||rejectIfBase64Url(srUrlVal))return;
     d={video:document.getElementById('srVideo').value.trim(),photo:currentSrPhotoData||srUrlVal||'',note:document.getElementById('srNote').value.trim()};
   } else if(sec==='about'){
     d={about:document.getElementById('fabout').value,year:document.getElementById('fyear').value};
@@ -2649,8 +2785,23 @@ function importData(input){
   reader.onload=function(e){
     try{
       var d=JSON.parse(e.target.result);
-      if(d.products)setProds(d.products);
-      if(d.categories)setCats(d.categories);
+      var strippedCount=0;
+      function stripBase64Photos(list){
+        if(!Array.isArray(list))return list;
+        list.forEach(function(item){
+          if(item&&item.photo&&isBase64ImgStr(item.photo)){item.photo='';strippedCount++;}
+          if(item&&Array.isArray(item.photos)){
+            var kept=item.photos.filter(function(ph){
+              if(isBase64ImgStr(ph)){strippedCount++;return false;}
+              return true;
+            });
+            item.photos=kept;
+          }
+        });
+        return list;
+      }
+      if(d.products)setProds(stripBase64Photos(d.products));
+      if(d.categories)setCats(stripBase64Photos(d.categories));
       if(d.enquiries)setEnqs(d.enquiries);
       if(d.activity)S.s('activity',d.activity);
       if(d.content_hero)S.s('content_hero',d.content_hero);
@@ -2661,10 +2812,13 @@ function importData(input){
       if(d.content_faqs)S.s('content_faqs',d.content_faqs);
       if(d.content_aichat)S.s('content_aichat',d.content_aichat);
       if(d.content_testimonials)S.s('content_testimonials',d.content_testimonials);
-      if(d.content_showroom)S.s('content_showroom',d.content_showroom);
+      if(d.content_showroom){
+        if(d.content_showroom.photo&&isBase64ImgStr(d.content_showroom.photo)){d.content_showroom.photo='';strippedCount++;}
+        S.s('content_showroom',d.content_showroom);
+      }
       refreshCatDropdowns();renderProds();renderCats();renderEnqs();updateDash();loadContentFields();
-      toast('Backup restored successfully!','ok');
-      logActivity('Imported data backup');
+      toast('Backup restored successfully!'+(strippedCount?' ⚠️ '+strippedCount+' old base64 photo(s) removed — re-upload via R2':''),'ok');
+      logActivity('Imported data backup'+(strippedCount?' ('+strippedCount+' base64 photos stripped)':''));
     }catch(err){
       toast('Invalid backup file','err');
     }
@@ -2770,8 +2924,8 @@ function buildWebsiteHTML(){
     return 'From \u20b9'+floor;
   }
   var catOptions=cats.map(function(c){return '<option value="'+eH(c.name)+'">'+eH(c.name)+'</option>';}).join('');
-  var heroImg=(featuredProds[0]&&featuredProds[0].photo)||(cats[0]&&cats[0].photo)||'';
-  var heroImages=[heroImg].concat(cats.map(function(c){return c.photo;})).filter(function(u,i,arr){return u&&arr.indexOf(u)===i;});
+  var heroImg=(cats[0]&&cats[0].photo)||'';
+  var heroImages=cats.map(function(c){return c.photo;}).filter(function(u,i,arr){return u&&arr.indexOf(u)===i;});
 
   // Embed ALL products + categories for client-side category filtering
   var embeddedAllProds=JSON.stringify(prods.map(function(p){return {name:p.name,cat:p.cat,priceLabel:fromPriceLabel(p.price),sku:p.sku,badge:p.badge,photo:p.photo,photos:p.photos||[],stock:p.stock,moq:p.moq||'',sellType:p.sellType||'set',sizes:p.sizes||'',desc:p.desc||''};}));
