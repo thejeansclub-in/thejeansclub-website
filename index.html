@@ -1088,7 +1088,7 @@ var S={
       try{localStorage.setItem('tjc2_'+k,JSON.stringify(v));}catch(e){}
     }
     // Sync to Firebase
-    var fbKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','content_theme'];
+    var fbKeys=['prods','cats','enqs','activity','pass','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','content_theme'];
     if(fbKeys.indexOf(k)>=0){
       pushKeyToFirebase(k,v,ts);
     }
@@ -1196,6 +1196,23 @@ function startFirebaseListeners(){
     });
   });
 
+  // Real-time password sync
+  DB.ref('tjc/pass').on('value',function(snap){
+    var val=snap.val();
+    if(val===null||val===undefined)return;
+    DB.ref('tjc/pass_ts').once('value',function(tsSnap){
+      var cloudTs=Number(tsSnap.val()||0);
+      var localTs=Number(S.g('pass_ts')||0);
+      if(cloudTs>=localTs){
+        IDB_CACHE['pass']=val;
+        IDB_CACHE['pass_ts']=cloudTs;
+        _idbSet('pass',val);
+        if(cloudTs)_idbSet('pass_ts',cloudTs);
+        try{localStorage.setItem('tjc2_pass',JSON.stringify(val));}catch(e){}
+      }
+    });
+  });
+
   // Real-time activity log sync
   DB.ref('tjc/activity').on('value',function(snap){
     var val=snap.val();
@@ -1219,8 +1236,8 @@ function startFirebaseListeners(){
 // ══ FIREBASE SYNC — pull cloud data into IDB on login ══
 function syncFromFirebase(callback){
   if(!DB){callback&&callback();return;}
-  var tsKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
-  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','activity'];
+  var tsKeys=['prods','cats','enqs','activity','pass','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','content_theme'];
+  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','activity','pass','content_theme'];
   var done=0;
   var pendingPush=[];
   keys.forEach(function(k){
@@ -1278,8 +1295,8 @@ function finishSync(callback,pendingPush){
 // ══ PUSH all IDB data to Firebase (first time setup / manual sync) ══
 function pushAllToFirebase(){
   if(!DB)return;
-  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','activity'];
-  var tsKeys=['prods','cats','enqs','activity','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
+  var keys=['prods','cats','enqs','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','activity','pass','content_theme'];
+  var tsKeys=['prods','cats','enqs','activity','pass','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','content_theme'];
   var now=Date.now();
   keys.forEach(function(k){
     var val=S.g(k);
@@ -1431,7 +1448,7 @@ window.doLogout=function(){
 // ══ SILENT PUBLIC SYNC — pull latest from Firebase on every page load ══
 function silentPublicSync(){
   if(!DB){return;}
-  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
+  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','content_theme'];
   var fetched=0;var changed=false;
   keys.forEach(function(k){
     DB.ref('tjc/'+k+'_ts').once('value',function(tsSnap){
@@ -1465,7 +1482,7 @@ var _publicListenerStarted=false;
 function startPublicRealtimeListener(){
   if(!DB||_publicListenerStarted){return;}
   _publicListenerStarted=true;
-  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom'];
+  var keys=['prods','cats','content_hero','content_contact','content_stats','content_about','content_location','content_faqs','content_aichat','content_testimonials','content_showroom','content_theme'];
   keys.forEach(function(k){
     DB.ref('tjc/'+k).on('value',function(snap){
       var val=snap.val();
