@@ -1371,36 +1371,68 @@ function logActivity(action){
 function doLogin(){
   var u=document.getElementById('lu').value.trim();
   var p=document.getElementById('lp').value;
-  var sp2=S.g('pass')||'admin123';
-  if(u==='admin'&&p===sp2){
-    S.s('currentUser',u);
-    document.getElementById('loginPage').style.display='none';
-    document.getElementById('app').style.display='block';
-    var tb=document.getElementById('tbtitle');
-    if(tb)tb.textContent='Syncing...';
-    // Wait for IDB then Firebase
-    onIdbReady(function(){
-      onFbReady(function(){
-        syncFromFirebase(function(){
-          initApp();
-          logActivity('Logged in');
-          if(tb)tb.textContent='Dashboard';
+  function tryLogin(){
+    var sp2=S.g('pass')||'admin123';
+    if(u==='admin'&&p===sp2){
+      S.s('currentUser',u);
+      document.getElementById('loginPage').style.display='none';
+      document.getElementById('app').style.display='block';
+      var tb=document.getElementById('tbtitle');
+      if(tb)tb.textContent='Syncing...';
+      // Wait for IDB then Firebase
+      onIdbReady(function(){
+        onFbReady(function(){
+          syncFromFirebase(function(){
+            initApp();
+            logActivity('Logged in');
+            if(tb)tb.textContent='Dashboard';
+          });
         });
+        // Fallback if Firebase not ready in 3s (e.g. offline / slow network)
+        setTimeout(function(){
+          if(document.getElementById('app').style.display==='block'&&
+             document.getElementById('s-prod').textContent==='0'){
+            initApp();
+            logActivity('Logged in (offline)');
+          }
+          if(tb)tb.textContent='Dashboard';
+        },3000);
       });
-      // Fallback if Firebase not ready in 3s (e.g. offline / slow network)
-      setTimeout(function(){
-        if(document.getElementById('app').style.display==='block'&&
-           document.getElementById('s-prod').textContent==='0'){
-          initApp();
-          logActivity('Logged in (offline)');
-        }
-        if(tb)tb.textContent='Dashboard';
-      },3000);
-    });
+    } else {
+      var el=document.getElementById('lerr');
+      el.style.display='block';
+      setTimeout(function(){el.style.display='none'},3000);
+    }
+  }
+  // Pull the latest password from Firebase BEFORE checking credentials — otherwise
+  // a password changed on another device is invisible here until after a login
+  // already succeeded once (chicken-and-egg). Short timeout so offline logins
+  // still work using whatever password is cached locally.
+  if(DB){
+    var settled=false;
+    var finish=function(){if(settled)return;settled=true;tryLogin();};
+    DB.ref('tjc/pass_ts').once('value').then(function(tsSnap){
+      var cloudTs=Number(tsSnap.val()||0);
+      var localTs=Number(S.g('pass_ts')||0);
+      if(cloudTs>localTs){
+        DB.ref('tjc/pass').once('value').then(function(snap){
+          var val=snap.val();
+          if(val!==null&&val!==undefined){
+            IDB_CACHE['pass']=val;
+            IDB_CACHE['pass_ts']=cloudTs;
+            _idbSet('pass',val);
+            _idbSet('pass_ts',cloudTs);
+            try{localStorage.setItem('tjc2_pass',JSON.stringify(val));}catch(e){}
+          }
+          finish();
+        }).catch(finish);
+      } else {
+        finish();
+      }
+    }).catch(finish);
+    setTimeout(finish,2500);
   } else {
-    var el=document.getElementById('lerr');
-    el.style.display='block';
-    setTimeout(function(){el.style.display='none'},3000);
+    tryLogin();
   }
 }
 function openAdminOverlay(){
