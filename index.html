@@ -245,6 +245,7 @@ tr:hover td{background:rgba(201,162,39,.03)}
   .tb-title{font-size:16px}
   .tb-badge{font-size:9px;padding:3px 8px}
 }
+.nf-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(201,162,39,.1);font-size:12px;line-height:1.5}.nf-hint{font-size:11px;color:rgba(245,237,214,.45);margin-top:10px;line-height:1.6}.nf-chk{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:10px;cursor:pointer}.nf-chk input{width:auto}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -299,6 +300,7 @@ tr:hover td{background:rgba(201,162,39,.03)}
     <a class="ni" href="javascript:void(0)" onclick="sp('categories')"><span class="ni-icon">🗂️</span>Categories</a>
     <div class="nav-sec">Website</div>
     <a class="ni" href="javascript:void(0)" onclick="sp('content')"><span class="ni-icon">✏️</span>Website Content</a>
+    <a class="ni" href="javascript:void(0)" onclick="sp('notifs')"><span class="ni-icon">🔔</span>Notifications</a>
     <a class="ni" href="javascript:void(0)" onclick="openWebsitePreview();return false;"><span class="ni-icon">🌐</span>Preview Website</a>
     <a class="ni" href="javascript:void(0)" onclick="downloadWebsite();return false;"><span class="ni-icon">⬇️</span>Download Website</a>
     <a class="ni" href="javascript:void(0)" onclick="sp('settings')"><span class="ni-icon">⚙️</span>Settings</a>
@@ -529,6 +531,65 @@ Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me disp
     </div>
 
     <!-- SETTINGS -->
+    <div class="page" id="page-notifs">
+      <div class="sh"><div class="sh-title">🔔 Customer Notifications</div></div>
+      <div class="egrid">
+        <div class="ecard">
+          <div class="ecard-title">📣 Naya Notification Bhejo</div>
+          <div class="fg"><label>Type</label>
+            <select id="nfType" onchange="nfTemplate(false)">
+              <option value="update">🆕 New Update / Arrival</option>
+              <option value="price">💸 Price Drop</option>
+              <option value="discount">🎁 Discount / Offer</option>
+              <option value="trending">🔥 Trending Article</option>
+            </select></div>
+          <div class="fg"><label>Product (optional)</label><select id="nfProd" onchange="nfTemplate(false)"><option value="">— No product —</option></select></div>
+          <div class="fg"><label>Title</label><input id="nfTitle" maxlength="60" oninput="this.dataset.e='1'" placeholder="Notification title"></div>
+          <div class="fg"><label>Message</label><textarea id="nfMsg" maxlength="180" oninput="this.dataset.e='1'" placeholder="Short message for customers"></textarea></div>
+          <button class="savebtn" onclick="sendNotif()">🚀 Send to All Customers</button>
+          <div class="nf-hint">Website kholne wale sabhi customers ko 🔔 bell me turant dikhega (aur jinhone Alerts ON kiye unko browser notification bhi). Product choose karoge to "Product dekhein" button aayega.</div>
+        </div>
+        <div class="ecard">
+          <div class="ecard-title">⚡ Auto Notifications</div>
+          <label class="nf-chk"><input type="checkbox" id="nfcNew" onchange="saveNotifCfg()"> Naya product add hone par</label>
+          <label class="nf-chk"><input type="checkbox" id="nfcPrice" onchange="saveNotifCfg()"> Product ka price kam karne par</label>
+          <label class="nf-chk"><input type="checkbox" id="nfcTrend" onchange="saveNotifCfg()"> Product ko Hot / Top badge dene par (Trending)</label>
+          <div class="nf-hint">Product save karte hi notification apne aap chala jayega. Out-of-stock products ka notification nahi jaata.</div>
+        </div>
+      </div>
+      <div class="egrid" style="margin-top:16px">
+        <div class="ecard" style="grid-column:1/-1">
+          <div class="ecard-title">📲 Mobile Push Setup (site band hone par bhi notification)</div>
+          <div class="nf-hint" style="margin:0 0 12px">Push-enabled customers: <b id="pcCount">0 / 0</b></div>
+          <div class="nf-hint" style="margin:0 0 12px;line-height:1.9">
+            <b>1.</b> <button class="savebtn" style="padding:4px 9px" onclick="nfDl('firebase-messaging-sw.js',PUSH_SW_CODE)">⬇️ firebase-messaging-sw.js</button> download karke Vercel me <code>index.html</code> ke saath upload karo.<br>
+            <b>2.</b> Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → <i>Generate key pair</i> → public key neeche daalo.<br>
+            <b>3.</b> Firebase → Service accounts → <i>Generate new private key</i> (JSON).<br>
+            <b>4.</b> Cloudflare → Workers → Create → <button class="savebtn" style="padding:4px 9px" onclick="nfCopyWorker()">📋 Copy Worker Code</button> <button class="savebtn" style="padding:4px 9px" onclick="nfDl('tjh-push-worker.js',PUSH_WORKER_CODE)">⬇️ worker.js</button> paste karo.<textarea id="pcCodeBox" readonly style="display:none;width:100%;height:150px;margin-top:8px;font-size:11px"></textarea> Settings → Variables (Secret): <code>PUSH_SECRET</code> (apna password) aur <code>FCM_SERVICE_ACCOUNT</code> (JSON ka poora text). Deploy karke Worker URL neeche daalo.<br>
+            <b>5.</b> Save → Send Test Push.
+          </div>
+          <div class="fg"><label>VAPID Public Key (Firebase → Cloud Messaging → Web Push certificates)</label><input id="pcVapid" placeholder="B..."></div>
+          <div class="fg"><label>Push Worker URL (Cloudflare)</label><input id="pcWorker" placeholder="https://tjh-push.yourname.workers.dev"></div>
+          <div class="fg"><label>Push Secret (Worker me PUSH_SECRET jo set kiya)</label><input id="pcSecret" type="password" placeholder="secret"></div>
+          <button class="savebtn" onclick="savePushCfg()">💾 Save Push Settings</button>
+          <button class="savebtn" style="margin-left:6px" onclick="testPush()">🧪 Send Test Push</button>
+        </div>
+      </div>
+      <div class="egrid" style="margin-top:16px">
+        <div class="ecard">
+          <div class="ecard-title">📲 WhatsApp Subscribers (<span id="nfSubCount">0</span>)</div>
+          <button class="savebtn" style="margin-bottom:8px" onclick="nfCopyNums()">📋 Copy all numbers</button>
+          <div id="nfSubList"></div>
+          <div class="nf-hint">📲 button par tap karo — upar likha/latest notification us customer ke WhatsApp me pre-filled khulega.</div>
+        </div>
+        <div class="ecard">
+          <div class="ecard-title">🕘 Sent History</div>
+          <button class="savebtn" style="margin-bottom:8px;color:#f87171;border-color:rgba(248,113,113,.3)" onclick="nfClearAll()">🗑 Clear all</button>
+          <div id="nfHist"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="page" id="page-settings">
       <div class="sh"><div class="sh-title">Settings</div></div>
       <div class="egrid">
@@ -1659,7 +1720,7 @@ function loadContentFields(){
 }
 
 // ══ NAV ══
-var ptitles={dashboard:'Dashboard',products:'Products',categories:'Categories',enquiries:'Enquiries',content:'Website Content',settings:'Settings'};
+var ptitles={dashboard:'Dashboard',products:'Products',categories:'Categories',enquiries:'Enquiries',content:'Website Content',settings:'Settings',notifs:'Notifications'};
 function sp(id){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active')});
@@ -1671,6 +1732,7 @@ function sp(id){
   document.getElementById('tbtitle').textContent=ptitles[id]||id;
   if(id==='dashboard')updateDash();
   if(id==='content')loadContentFields();
+  if(id==='notifs')initNotifAdmin();
   if(id==='settings'){checkBackupReminder();loadCfSettingsUI();}
   if(window.innerWidth<=900)document.getElementById('sb').classList.remove('open');
   return false;
@@ -2539,10 +2601,10 @@ function saveProd(){
     photo:photosFinal[0]||'',
     desc:document.getElementById('pd').value.trim()
   };
-  var wasEdit=false;
+  var wasEdit=false,prevProd=null;
   if(eid){
     var idx=prods.findIndex(function(x){return x.id===parseInt(eid)});
-    if(idx>=0){p.featured=(prods[idx].featured===false?false:true);prods[idx]=p;wasEdit=true;}
+    if(idx>=0){prevProd=prods[idx];p.featured=(prods[idx].featured===false?false:true);prods[idx]=p;wasEdit=true;}
     else prods.push(p);
   } else {
     prods.push(p);
@@ -2553,6 +2615,7 @@ function saveProd(){
   closeMod('prodModal');
   toast(wasEdit?'Product updated! ✅':'Product added! ✅','ok');
   logActivity(wasEdit?'Updated product "'+name+'"':'Added product "'+name+'"');
+  autoNotifyProd(prevProd,p,wasEdit);
   var la=document.getElementById('lastAdded');
   if(la)la.textContent='Last added: '+name;
   }catch(err){
@@ -3333,7 +3396,7 @@ function buildWebsiteHTML(){
     +'\n<link rel="canonical" href="https://thejeansclub-website.vercel.app/">'
     +'\n<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"><\/script>'
     +'\n<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"><\/script>'
-    +'\n<script>try{firebase.initializeApp({apiKey:"AIzaSyCbrej21968UxvwEJRp8T1JUfzgMOJAAOA",databaseURL:"https://the-jeans-club-website-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"the-jeans-club-website",appId:"1:610707824562:web:24f08e30351371c5270eab"});}catch(e){}<\/script>'
+    +'\n<script>try{firebase.initializeApp({apiKey:"AIzaSyCbrej21968UxvwEJRp8T1JUfzgMOJAAOA",databaseURL:"https://the-jeans-club-website-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"the-jeans-club-website",messagingSenderId:"610707824562",appId:"1:610707824562:web:24f08e30351371c5270eab"});}catch(e){}<\/script>'
     +'\n<meta name="description" content="The Jeans House &mdash; '+eH(about.about)+' Browse '+eH(stats.s2v)+' styles across denim, shirts, jackets and more. Enquire on WhatsApp for instant wholesale pricing.">'
     +'\n<meta name="theme-color" content="#000000">'
     +'\n<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAA+CAYAAACbQR1vAAAgwUlEQVR42s17aXgc1ZX2e+6trTdJrV3eN2yQsMGYBAw2lgEDybCDNJMZljAhJuNhmQSYfFlbghCyDAFCwgCBAFkISEAIkECAYJuQADaOwYts402WrF1qSb3Xcu/5fkjGNoTEEGdm6nn66arqqlvnvHXuue9ZmvD32SixZImsq6wUTjxu6OJimQ6HKQoI03EoUihwHtAAkAmFyBoa0l42y05FhbYzGeoDMDkaVQNt0EDbu4MO79rF3dEoN69erQDwYRH076H9vcuXm901NXaytFRMC4eNkmIh3YJJ5Y4jgiAQuVwOVtwKpCl1ZlSbKC72kU5DqVGRcspdO5sllAAjI0A4Hlf9oZROuyW8bWhIX1hVxfPeeEMtbW4+LCAcdgBaGhrkU6ZZdFxfcto8MkpzwtLETGyanArcYkGaK0JF+UIuJ0YD36mMRLMFz7Vsg4KIEQpS6bSOWMIf9bVTZNr+kJu3c4FPREKXeh6v9b3UhqPK288KVwxfdd99wd8KwmEFgAFqZBaLKiqOPU9EnkhClwmtVMAgQzOUbQqpGWBWvpDSYIYgaJ+10EJAMDMpEEkwkSATxIEOyNNMphQaMIyQlP2/iMmLkytWbOx99dWgtbVV/S0yG4d77rcCuKygp6SQnvo0a3ZDpUSS4BHD0BJ+4IKkBaE0ClqhRBoY9Hwui4apL5VCZSiE0YKHiGWAiOFSCGRZTMrHhHySFoImL5Bx59zTTuN7f/IT0Qr8nwIAADgliSMklG2XqabqpQTLJhgSMEKQUkMrgCEgSIEMB8rNQ+gA5ETBHEAqH74ZBtwc4OUBaQNuin+w5zlRqjxvOyk9q6ODuvN5JBIJ0dzcrP9PANAKEAxDwbJgRUrlFHeE7up7SRhk8GYv8NvCFeLl8HQySipATIC0QV4KBhHAGsIvAMJA3nUxsX8nL07t0kcHaRkzhQyrAKUI4Etptfu+e3KojyaEQrr7b5T5sAKwGeDL77/feePzn981MTO664hYSXkhOxqYhNAZTig0UujET9Kd6gEsokK0jAlgaA+QJrFhQ3MAr+DysoENdNnAW7Q0UmT1B572WQxrCG1IU3amU68+vmB65w3PbpIPRKNBPQBmJiLi/1UnyMzU1NREmZ07QzxzZqjzuV9VluQKFcoMeZTL2VUdXbXnONFvlEsqusI1+dVZnxCOlFobNrSfhzQMUnYRW31b8cO9L2KxEzPeLGR/ulLyDzZzYcRJewWvPGZbnzjLvbD2uHTf1q35HttWw8PDuqWlRX9UAA6bBTQ1NdGqVatEfX29KvU8OmX51SPGnI/3/MOiuRkAIMdZNbmQFidb0bsabO2/lhvloKQaUIqkIVmSZNf3qDG9Rx1rOlaP5638p2f/419x2s0BmAEiUDKLbccvsp9pbxfTpk1DT0/Pu8/+qMuhOJxToL6+XgAwiior/fWdnb1nL543TEQ+Efkt554rtzjWKobOF3Jp0wiyrDkgIkArQVoHRKyQzw7A9FwIw/o11zeplVobYCZmJtaaZl93nXv97bfnAaDOtkU8HhdtbW3EzPS/CsCqVatEMpmkCaGQRElJYdwz07v84PHHFedyeSGle5QTQgiAFg4jcAFBIKeI2c/z8SZRxApBOlaaANSPLXNj/uKAtxypg3ZKS2VNTQ3V1tZSY2Oj+CggiMMx9xOJhKivr8e0aYaQRDoS+Y2/nxsdvEnNYmc+C19rCO2BDJPJclh7eZAwaWs+h2HlISwkICV/kJ9qaGjy40VFXJosJaBNHDAV/r4+YJ+z23fc2NhI8Xhc1NTUUBBUG7bjUGPjn2dnLgAfwBFOGBYx8ioAESPIZmGEwsS+h+OcEEfhwyX9lwgOERHfeeedOpjWLpLt1Toed0VbW5se5wV8qD7B+MvKQqC1gVZt7qcBDAigDq1NjTihNE19RXmKJCtpwul5CndXGyhNwg7DgJGz3nw6ESw4BwWgmQWNC8IMH2DLMHhLdhSutAEIKN8DGUTwMgAD63NZOl0wyAoLEAENIG5JCKB53BoS49I1Y/tzO7BjqNSMphBsTaVEXZ2tT6tp43PuXcALZkd53TsZAoD07CjX16/WRNAfAgACEWug9YBzWwB8XQBNAFYJoN1ATRkhHtNQO2nurBDXhE1v7TDM4XMb8mNCM+2z4mLHgV9wUWeFEVZ55BgkDZNBPMb2VAbHRIvY8TLIuPkASoFaoUDNB4Qb7+5jyqKjwiPJPF15VpdVZWX959bU8HU/L80BrQpoEUArj+3vm0YNcvz4rwPwpXMqqi5eNvF827ZNK2zoorgZSChAvk6Bt8zM5jypGKx8T8RLzcC2ouwGioQFNTyUt5Pnf8s06Hh++Y26V/Awr4UQcAuAiEhscV1k2YSUYEEEFhYE+0zSxluZUZwuAWnZgBD4+XUzP75wYc3CoYyWFLAGFAoaZshEUFz6JA/2puj+53nl6IxPdlxQ9svaHz1RcpyPpVzIfE/CtMF6obYMi7PZArU8/9YT32xF94HT430AJBIQzc2kneH+o0tExT2VE6LwPQXK55BPFeCqDBgByipjiJXFkBvVSPUNI6PTAGlIQYiZEpNmFyFEhN1/2vUFImMNiCEB1gFznWEhJIACGOy7YKEAOwL2RmlBKIa4LqCPfQGlDOOykn+1enFVeTiMooooYhWlgGUhSKeR7k3Cz2dwQjx/xneLlu9duu22i2VPzXUqHMHEiiic0ji0n0O2LwORHUWl6t0BUNcYcxwD4QMtIK8te2g0r/as3C5eeaU31T+MV3Meej0FFbGx+J/PL5t11MLpQbInY/7wjq2/T2vsIIY0gZKiME6ee3S46h/OPyKw7RCAEQCAY7OQAG3yCsjrgEkLgjABaSJQAaCB9bkUThMaIRFREDLYtDD22LMrt3dHJM4+dbEzf8GSmUFRRUz85mcb9Muv5X4Ri+DNylOXdvzrhJfCe9eFHv/ad7YPRcO4rPHC6qnTP4agd9Ne80f3t6/MMZ4pn1O1JYEvCKL9wdMHAmCGDVVkC3p1w/DmtszEzy68/ivDJZWV9OmLLtr9jcXGzU40dKMww34o5BlHzxb3/NuLRgtIA8xomD91irlt1/31w/4yCoeDfRaXAyggpqNMCw5JuIIBPcZhpZSAkDg6HKWwdpGXAKAxd+KPXrn59UtWXnuM+QeQeMlw7MAQpgXC7x/ey1eSaWt+ZxUYK6mRuesWYO2ji+wATN8MhR3OFXytSmOJoj+l/tTR2Chax5zpB/OApnFfM61SimR/Roy61lVL7nikKxoki1XPO/FvPfR8TbGhHUNoABoEhuvqUIM+TybmBFaLVrJ1/Z6O3n57+fatfQjbfvE+HxS4LptMvCnwkAcRMQNSgqQxJpQhuc0rIOe7CIQpICQaWhvR8KgrIWyhNBD4ioh9FEXkYKKpCS+f7BkAgwDUEvHPV4EiNjQD8PMFwQKuaQDm9VfF4vFd78sgvZ8INYMBUO+A7nxt/ch/Dp7879vya38Fx67oFIYcDJWW5FM+oJmgNAOsYUsErWhVdXVQjYBquUjJhz9X6NiyPbdi+1Z/XSKhBACUAsymwNG2gzAUFI05BfguSGuAgbpwlG3TQo75Xdla/9FQ2s8qwyBASCgWyCqi5uZmXV9/8NLWfKpVMKXQQhBYGghHQjB0XhdmzCucPjxD/1UmuI9yfuXFzObrX/S/q0c7tFkUG02rZCGfTRV6ZcSzJIiIwDoACQMeCXEgYWtshWppa6TrXvD+e8UTPc+hmQAmDACCAo1tbgE5zRAQgGZopQAhABK0MTVC+cCHZQqCGB+TNYjAhiQgUGCfYRETt7RIAIITEC0NEE0JoEV70rRAIAFmDdaKWEFnI3XBhyJCDMJ9yxeY61Q0096eMoqKoE1/INiZq/LLpYDWgCEMuFAw6P2sq7G1VSUSEE1jFsXNYEjbZp8ZRxgmQiRRYCKpXaZQBYEDIPD46KIyLnKH0U/E+0clhKVBzAALCRIMgipQY+P72eLNUXznZM8Da5CQcAsKhQBcVJXn1g8DAAGM+9b5DQ0zJIAgCAJdE8l7AMAKUhoCCgSChC0wTnYOxqG5Gbp5PBgCgDAR20LwTs+HSwzBHsguBvkp1iIEQNDm0QE63SREWBCE2PcuEACAEDAkEwvJE6fEJ7zz0IIzzKgID496Rq6gpRDSqJpSObrp6VfnWCELBAlACE0wUn0hqq1t5Q8dC7S2tuqWlgZs3tzPMlfsdaJSnQg95r8siUABSh5CboUIXoGFHyGaQQRbmMizANxRaBmGIA0I4qOiJYjpPNJSEFyXWokIzIAKNGsDnqfEaI705DkTFjum/1sVAJFiQJYYUFqD80M4bvF0jA5lAvYLUkhiRwf5idOAut800MHM9tCCId68uZbb2oDjp7nYi06QMJjAgGaYhoDraz6U5BLD1dAh7hACnp8HQGAjAtIuAEkgydvzaRRIAUozLIsbxu0xHYAUBIQAG/BE60NvJ3ft9XZGw5Ca4UsQg1i4CiQZVWd+YtLEyhnlTJLJhInUwABt7u+njxQONzU1cW1tLff35LXMTmaQZhYCKgjAOoBgQYcCgBoLMKhGBTCFBKRg9nPQMAEWDJWnmeEimNKAP3btGG5CIOrYBjSDGVwUkaK60lz1g218wt5TLzll93mJU3513mNLNk48e+n3vsoLi2LizrDFUmtDC0i2QuN61q/WHykcJiJmBprOOZv3zIViEiR1gEAbCNgA6UOwAAaKYIMDRb2GhUA4QOAShAXWDEkuw4qiLZ/lTxoMUwrGARGxY0khSUEIwcwMaQhBMPinUZUfX7qBBAJqNHRoqRDMDMMYMyQE0EXZCsaqJQI4GATxoeo+E3ow6w8QzJBCStgmQDqA64P/avhNQAoutCCUBz6knwWTBUEMaTBgFgFuhmsdBw4LCOUfdLtnEAcaEGAY0gQJYh4HnfZnjMYMBlCmJChWLMb4OaUiNqFyQLx704cFoKmpiaK5UvKT7URjrBXK9yFYgcWhOACGbQMGEUZMG8pwQNBgKZikA/ayBMPBFl/BVT5yegzz1nHTcnOAkBLCkPCC4C8nOaQQvqfASgBCipTHVnWq30hWT6GmpgR95JRYJJa3jpncZfquRsHVAElAMNiDYm6QAORfMoHABWsijrtZiCAHSIMRBKQDf0xbrTDHtBCSJiwBAgENAFj5siisAsNg+D5DgCAAMPuEpgPAbwMxK5n1tZaGBMDwC67UHLMmxPuiUyxlYNUq8ZEAaGtrM1b897XZp6/8lpo9O3pUaVWJ1lBcNqlCH1UXm0fUqhpb4X2w/gwJh4mZR5wIWBpjRE8aIFKAGQJYY5tfQF4pIO8F0BoE1kSkbG90SnVllJ2IrYxoRFfWRCcTkU1ECg0NYwtxKykiUhPLaVJJ3GbN8KfNmmAcNzUz69IV56bWdU2JtlVWig9dGOEERP2qJda3P9nfMHly6Eou+Kf09uRhw0esqgyhqAVp4rHed5L31RXeWQUA1Lyfo/N4Du8Gy5p5Rbj0T2uzo0XXTlgapEunkG1KaCYQa3YDxi17ntENumANh0LLT+jv/tETK6aduOiU4osLKe/TShlloyMZxEojiBVF4evg5b7+/Mr7f5V7pHLRO+3HZKedsOj48ktzBfVpP+eHvIKPaHkRDMvImoTnX3i5//ZfJRe83lLbyvvkO7SkaBM4c3xGvfVG58VvrbOn93Wm3hzO+uxqZKXeQ5XVoWDatOgxOZE98ej78XJLw5+ZCsxQtk2sfCBaDK19CCKwZgAazIJIKGxXCgUdgKDokhG/sv/S+BmvPD+6vCfpJfu60qPa16wAFJc4XFkdnRuP4Ij5Vdazj9kvxcv+NLD05aHsp/b2u12jg1nyA02mJBSXRWlChX1q4Lk/aW19XLUeIN8hLoPgJUui/LknMxcDZnjKmY3huza9OHVhcemnk5qLMAR469RAmVUx+fii9MzjWzt3JgDRjIMjNSbSgGRkR0AlDlhaUIUUKBSD0Brse5gtAAkJVqTrkhv9tVtqb//xtj9+C4C8YtGxUb8qFs1klMgODertK1O6D0bQ2LBQHdHxsHy4+2P3rXtmzUNzS0OipGY6iQix6Uu97bkOdCIdAEtSwGpqbN1fUj/ktPjq1avVvcuXG9FSKa7PFoLaNXTz9vTg6X1EoMBFwQnjKEUosixFhKub+IBU5vhsU8ykWUFE4yAigBVEqBhQeSZpAUaU2gOGFsCg53pfmjpvmMbfAAFYuvwLoqOjwzCMdC4UmlBIOkmJ7qSxc+ewMs3BYMaMSnH22ZfmUqkIJ5NJLirq497SGH/1c0t49uwarq9vVvSewO3D1AW4+777VF1DQ6HX8+wB142SIdT3y+f7W8pni+N61qkvjb5jQYoJTAQwv4d1MU0xDBsBG9n0MFSxBkkBBDmwDEFDAvkeHKl9ATBcAwNgJk1jNIwBXHbZZdnvXn89brjttty+dT+xZImxJZOhGTNm6NraWgaacfvtB1eRWg9XYaQZ4JXhMCMeZxIypQJX7tJC95XPFmsKGeoa3CKrTTrmrONnFmHNjjSPLYsagCSiYEYgp9isw7lIPMjbUTICBa0loF1iy+Ry5XFEKOkLI91WU9EDKffVuvYpQ0WzZ3t0gHJtlZU8o7KSW1tb9QdVow5raSy2aZPCDecXBkitnxyKYuHwTkZ/O2Vi1WK9cLx04M54ZMD+MhGYMJb0ISDgi1meaNpX9+mANrpKaycOAkNIwLIsBJA0K7ldH6cCGEJsfnHZx9pZq4NibGZGd3e3em+0Ot4nxB+lQvyha2kNgMSmTfL4+voTPuHTS+sExLXlJ1F68gJM79/A3935a0xzioypJVW/yJrygaTppCbooEiMJK9rTw2e0ytE8NlJS2kgXA1TCiBwoU0bengAdw38Xp2iCtZu1v9xTi51Jyst6ABH2tLSIhsaGj5yL8BhASCRSIgF69Y55y5bYLz4lbvumWNbn/q6Mt2HJi81RPUsPatjjfh/A+t4RiFlxCOlsLSfzwoR0oUM3rJiwfeis2j71IUw/DygNRRJBK6Hz/SuVstTnZYhrc3/vnjema89+7vu9yr6t3SCHK7iKLW1tRFCoeBOlBrPlJjftIf9U74QoYlDe1/1njWj8p0pC/mGshl0bPd6b6E/INzUiGPGSoI37Ml6a2Wt7I5UIexlOTBC5Hl5hN1BXNz9WnCNHrXZDOdbI/LGW5/9XZ8YU/SgKXC4lf/IFtDT0yPnDQ/bOxsaLOOzV8xv1KEWK+yUPhII96HokbKv/AhCURkQqHfLjAAx/AIQ+IBfgMz0Yb6f1P+c3KL/wbHskUIh81s/+5lH8/mnNhMFBGj8D2wf3gc0NMja2loJwKjzkpH2M86Uw5dcddS56eDOEslz+0wbT7rsbYpU804RpawTIc0MoQklnOW48vikIEXTc4PWJ2wDrudi2PNeezo3et1tQqxlffC8/z8HwD4rmDBhguzu7lYLenqc0RtuMFb8y7nmA20919ZI+zMVBk0kKZELfIxKEwh8SGkiIgFTMwSAPFOuL597batfeOh6v/ALAGolYNTzGEsj+mCP/mF7AP5HusQECWhogFH8PWnVT7WtxRErNAVKx6XSkoUojPrBgK91d5fy1z+qC6+vAzo+Sjtu/ZIlsrKykmtra/lvaZL8e/QKSwKp976YhpuXTQ+xEy6fGvafWjS/b9eML6YY18Ye/twrsUlTnGBzL5ubtwymzzyzyi41dHikAFzwJWcvsDr4M2/fqKur49bWVowxP+BvsYa/R7s8tQBiGBDLGxr09tr1kV2j7r3VU+JHFjzOjgzk3ty0NffTCy6a8PSra5OXz5webohEnKMe/WX3JZeeX/l8fzJ4K5v2uC/t33TlPe3bmEHvmQ5/riXuvefoUFmh+JBgHQpg3AioqwCfWltVCtngyfs7r/Hz2d2WLvx69W933rpxk7WzkMrlqqrsc2zwvJAubP/2Sz0dXrYwUBKmmmA485POV9p3M49FzO83tD9nfO875kN5yeI9ITvt+4zFMyA+GM2DUH5vgpEZlEjsH5MZtKBpkXtfhgaLwmZFuDgUv3UT+k6vSmvHlPGejpE3fT/ol6Y1+d7lC8xI1K4s5P29sYmRipMvn1OOJqChAZIBSiyBccDYlEhAJBLYl+Qk3r//rh77+VNCtLQ0yH3XHyj3X0CHCWiSU495K2pmo7qurlyceeYcWrFixfAh5D8PMtuWFRXRYtu8x/d449k/7Pn201fXHFns0K0jeb6bDF4oWBZ3Dcn/mlKpbmXD6hO+Z7y2suvm5rcxsjKxxFjavN8XcEuDpMYP/o/Awc9mkUg0Wc3NNxXeayj75gztW1baVrWGr7nAnpFOBaxNKZS2/GmTpXBTZJRWRcNDKqJ/vzbSd+NtP9sNgFoStWa2faD0iocHegHgxW/NKK47esaE3es35U7+Wu8eZlD7o8dMjZRb1ua3dXLpDesG9zx3Zl2xo0Jfbu3eevfdbRkA+MGK2ujxC2WJOZpznn5xcLBuijJnHhM3oyVVzhuvJTOX3barf/nZNeHv3TT3iPQA99Sc+WL/+tuPKamYHavMjowG3Z3w3LzKLTyrvGz3xhE6dvmGd9b9bOlUkDFvfV9ZT/s7w+lPLsgVZ1O5fFV1yIoVh9QTz2cKz2y02letWu2KsTW9R+aSpWauo++mJQuia6qk1zT8TscpMZ1/o6bYe373mzvvKMvsWXnWtPWn7QO6tlRddc75c9Z/cQGKAaB7c2rGno0dT5+4bMHm7ffNu4YI3LEt87XUXv16x9t7T0w9u/Ch4R09v17z0p6f/+dJxVseXj5jCjNoMpKLIiN6w5RJNRuOmRL5FOecT02ITtqNUfGHvi53+u4Ha89KXDZl0x+f3PNornOwLfncKdeufb2rsn/b6AsVRWVtg3uTF+7ZOnLkwDvZNcO9hS+/fdfcy8sp/Xrn+t1NS0t2vnxW1e7FqW27EyccGX0905F8uGtDx1PLZuefHGgbMIQgFm1tbbQA67Dtyt/ndm9NPkKpjDPcPfzcFQ/3PpjtHzVSg+mOM76986Q3Xu64pb8jXb0vSZpJepeXlcjqSz816WwQcPlPB9dvf3P3I11v745MnF71zQevrDh27Vu5B7t3DL85vLsvHyu2L+/rHP7+GbdsP7r97T2jVRE3TgQ+7+7e5zO9qQ3J3mHnwru6H/zHBwYfTHYNWNnBkbXb2ni4vDTyTEdbb+cZ39h23B9+u/XHcUfeedzHS0pHdu39Xa6v3378V12/vuqx7j/u3tD/dtfmzqeLI+LLbl6nz/+vHSdsfWP3U14QlLat637UcTPhVa9237roy9uWdLZ1br7uAh1jZoja2lpOd0d5xzyoipqIQYbk8jKb5lXBMEzTc+IxueX+4/597kmTzWd/0XEbAGwpPXLxwECOXlvV1VM+dcp14DHnMv/EWfzHV7t2De5NRs+5YO7tpTxAsdJQ0N5neDve7MKp581LjLx85o1r/tB9Xk/S2MacEMwgxxZeJB7nV7/zsX/63c1HXxwribEwjdGLTsosi4Yco6sj+SAJyu9cl//JwN60LimOfAaOpaVj8ZFHWDYzyIkaetLMSt62tr1v6tTYEfnXz/15ELbvbm41fjx5Wkl5YFi87PTJR+x4cOFXe/KRb3VvqxpggETzTTfpL/12p/nxVT8LBwFIaaZ8ICjeBxdgP+/xpK6dQ1dnkqm5t+9FHgBI8VXT5pSvdbP5TfFi52MrP1/5cRBQyLnlM+ZU3vPyExsfLYtS/eKzjrwxk8yJO7ZfsPmpX26/YfUTb5rFhn/LFV9c/FCqb4+1j/JqFQCuK4a6Bi5J9oxcKqUgpZQMYEwDWJfHjdxjj14srSLogq/JTXtlkqSlySIrbGm0QkCx9m1H3PnA6FVP3v/GxsyunsYzz5/7wu2fNaerQjanA0WDA/mzu3cP/IsPy2xevTpoSoDEv00uij95bc0Ld8TvuGz3pqGucMjSgXat1UCgIWwUshtPv3XP/I1re+5b/f2Fp16+ZGp1Nu99fPue7OzOPs/s70nx9HlTPk0Ae0owWQ794FnvP1c+vXlwVt2kc8yQkLdd0TZ5+jlL157+vb4599266vEyRy1acEzpsn3taoY0OJfJe+fd2X5Bw917LxwdyWvLMtydbam9IIiSqqKyxsZWNXO6adZUOrR3z1CXZviCfbXlLT+gRijTMDVls+ZX71wc+9RjM+pvuHrttf07eqOl5dbVg73usAGtt2zoar77th0fi0d955HECfOamsFGMhiNDncmFxVHwmsuvOSIUGYwLXZtS+340bVHV8UiCImQM7XjmVNrw25wUffeocovXhxaGQQic+FX2k6dDEz45ZElbXPmV1/+VGL+TVXVQbHLZmSdEJ0vv9h7zcypu34Rrwjr6Jods4+P2z8bePVf5g1teHtT946hizduyg6BCJseu9iijrfLyysj1v3XzZmQ6RgxK8ttkWM5Zd12I/HGyvZbZs6fdgO/Ubu2f9fgV3a29eG554cfnHe0/cmTT6qW37xj/j/fktVvD3UPzXv6ueG2y8tiL+x9ovq/OpOlL3B+gNq2je6trSuvtmMhsXjZkSdedu20gVznjh+v39T/dQI2EJjpO6eGLj1uQeWNDCre0db70L/95txvPPv5124Ncv75SpheNGYSAlWSGh75eSgWPTbqOGVrevmy2RPlbD00+nUhzVCk1FmVS/nTI2G7ajTjXX7RDzv/9MAFkbticWfy6rX5ry0+PnRPRXV8CoICtmwZuvfqZy/5NuhH/nM3TGvwsvlvCCGVE3Xu9wMv5Kb8S6ywxVZVfMXj33/bX/aJyjsrJsSm5tL5wdf/2J1oXmu03DjfnDB9Ev1w1lEVp4KQ6tg9euuVw195+MdFN981dVb8NCng9HSnV23dieYTF4R/kMv6VU5JVEP7jp9zee8ALrj6if7NGGNFAgCKABQDBGamBUAYgA3AGv82xoufBgD7rFmz7BOBEABn/BoHgAkg2nDipBAnEgJIiFlAUWLlSgMAjgGmAajY3/sAapj07hh2DRCuGXuuCSB8UllZbFw2mgNMGHu2GJd5bIAIUAUgChDGngkAKD0KmAoA11xzjQ2gZOxSxMa/7SWJhHFQfzAJGvNIB1BZIgKJ/R/Q+DkivPeafb/hgN8OpJzMPKb1e55x0Bj7jsX+4wQgxLhsdMC9vI+Kj9/77vkExD459jcQHKzHgfL/f59tj1zx9h72AAAAAElFTkSuQmCC">'
@@ -4077,10 +4140,391 @@ function buildWebsiteHTML(){
     +'\nfunction submitEnq(){var name=document.getElementById("ef-name").value.trim(),biz=document.getElementById("ef-biz").value.trim(),ph=document.getElementById("ef-phone").value.trim(),city=document.getElementById("ef-city").value.trim(),cat=document.getElementById("ef-cat").value,msg=document.getElementById("ef-msg").value.trim();if(!name||!ph||!city){alert("Please fill Name, WhatsApp Number and City.");return;}var enqs=[];try{enqs=JSON.parse(localStorage.getItem("tjc2_enqs")||"[]");}catch(e){}enqs.unshift({id:Date.now(),name:name,biz:biz||"—",phone:ph,city:city,interest:cat,msg:msg,date:new Date().toLocaleDateString("en-IN"),done:false,status:"new",src:"Website Form"});localStorage.setItem("tjc2_enqs",JSON.stringify(enqs));try{if(typeof firebase!=="undefined"&&firebase.apps&&firebase.apps.length){var _ts=Date.now();firebase.database().ref("tjc/enqs").set(enqs).catch(function(){});firebase.database().ref("tjc/enqs_ts").set(_ts).catch(function(){});}}catch(fbE){}["ef-name","ef-biz","ef-phone","ef-city","ef-msg"].forEach(function(id){var el=document.getElementById(id);if(el)el.value="";});document.getElementById("ef-cat").selectedIndex=0;var s=document.getElementById("enq-success");s.style.display="block";setTimeout(function(){s.style.display="none";},6000);var waMsg=encodeURIComponent("Hi TJH! Enquiry from "+name+(biz?" ("+biz+")":" ")+", "+city+(cat?", interested in "+cat:"")+(msg?". "+msg:""));window.open("https://wa.me/"+PHONE+"?text="+waMsg,"_blank");}'
     +'\n<\/script>'
     +festScript
+    +'\n<style>'+NOTIF_PUBLIC_CSS+'</style>'
+    +'\n<script>('+_tjcNotifClient.toString()+')();<\/script>'
     +'\n</body>\n</html>';
 }
 
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+// ══════════════════════════════════════════════════════════════
+// 🔔 CUSTOMER NOTIFICATIONS  (admin panel + public-site client)
+// Data lives in Firebase:  tjc/notifs/<pushId>  and  tjc/subs/<phone>
+// ══════════════════════════════════════════════════════════════
+var SITE_URL='https://thejeansclub-website.vercel.app/';
+var NF_ICON={update:'🆕',price:'💸',discount:'🎁',trending:'🔥'};
+var _nfList=[],_nfSubs=[],_nfBound=false;
+
+function getNotifCfg(){var c=S.g('notif_cfg');return c||{newProd:true,priceDrop:true,trending:true};}
+function saveNotifCfg(){
+  S.s('notif_cfg',{
+    newProd:document.getElementById('nfcNew').checked,
+    priceDrop:document.getElementById('nfcPrice').checked,
+    trending:document.getElementById('nfcTrend').checked
+  });
+  toast('Auto-notification settings saved ✅','ok');
+}
+
+// Write one notification to Firebase (+ keep only the latest 50)
+function pushNotif(o){
+  if(!DB){toast('❌ Firebase connected nahi hai — internet check karo','err');return Promise.reject();}
+  o.ts=Date.now();
+  return DB.ref('tjc/notifs').push(o).then(function(){
+    return DB.ref('tjc/notifs').orderByChild('ts').once('value');
+  }).then(function(s){
+    var ks=[];s.forEach(function(c){ks.push(c.key);});
+    while(ks.length>50)DB.ref('tjc/notifs/'+ks.shift()).remove();
+  }).then(function(){sendPush(o);});
+}
+
+// Real mobile push (FCM) via your Cloudflare Worker -> every customer who registered & allowed alerts
+function sendPush(o,quiet){
+  var cfg=S.g('push_cfg')||{};
+  if(!DB||!cfg.worker||!cfg.secret)return Promise.resolve(null);
+  return DB.ref('tjc/subs').once('value').then(function(s){
+    var toks=[],map={};
+    s.forEach(function(c){var v=c.val();if(v&&v.token){toks.push(v.token);map[v.token]=c.key;}});
+    if(!toks.length){if(!quiet)toast('Push: abhi kisi customer ne alerts allow nahi kiye','err');return null;}
+    return fetch(cfg.worker,{method:'POST',headers:{'Content-Type':'application/json','X-Secret':cfg.secret},
+      body:JSON.stringify({title:o.h,body:o.m,link:SITE_URL,tokens:toks})})
+    .then(function(r){return r.json();}).then(function(res){
+      (res.invalid||[]).forEach(function(t){if(map[t])DB.ref('tjc/subs/'+map[t]+'/token').remove();});
+      toast('📲 Push bheja: '+(res.sent||0)+' phones'+(res.failed?' · '+res.failed+' fail':''),res.sent?'ok':'err');
+      return res;
+    });
+  }).catch(function(e){toast('❌ Push Worker error — URL/secret check karo','err');});
+}
+function testPush(){sendPush({h:'🔔 Test Notification',m:'Push notifications chal rahe hain ✅'});}
+function savePushCfg(){
+  var v=document.getElementById('pcVapid').value.trim(),w=document.getElementById('pcWorker').value.trim().replace(/\/+$/,''),k=document.getElementById('pcSecret').value.trim();
+  if(!DB){toast('Firebase connected nahi hai','err');return;}
+  S.s('push_cfg',{worker:w,secret:k});
+  DB.ref('tjc/pushCfg/vapid').set(v).then(function(){toast('Push settings saved ✅','ok');});
+}
+function loadPushCfg(){
+  var c=S.g('push_cfg')||{};
+  document.getElementById('pcWorker').value=c.worker||'';
+  document.getElementById('pcSecret').value=c.secret||'';
+  onFbReady(function(){if(DB)DB.ref('tjc/pushCfg/vapid').once('value',function(s){document.getElementById('pcVapid').value=s.val()||'';});});
+}
+
+// Called from saveProd(): new product / price drop / Hot-Top badge => auto notification
+function autoNotifyProd(prev,p,wasEdit){
+  try{
+    var c=getNotifCfg();
+    if(!DB||!p||p.stock==='outofstock')return;
+    if(!wasEdit){
+      if(c.newProd)pushNotif({t:'update',h:'New Arrival: '+p.name,m:'Naya design aa gaya hai! Catalogue me dekhein aur wholesale rate ke liye enquire karein.',p:p.name});
+      return;
+    }
+    if(!prev)return;
+    if(c.priceDrop&&prev.price>0&&p.price>0&&p.price<prev.price){
+      var pct=Math.round((prev.price-p.price)/prev.price*100);
+      pushNotif({t:'price',h:'Price Drop: '+p.name,m:'Rate '+(pct>=1?'~'+pct+'% ':'')+'kam ho gaya hai! Latest wholesale rate ke liye abhi enquire karein.',p:p.name});
+    }
+    if(c.trending&&(p.badge==='Hot'||p.badge==='Top')&&prev.badge!==p.badge){
+      pushNotif({t:'trending',h:'Trending: '+p.name,m:'Ye article abhi sabse zyada demand me hai — stock limited, jaldi enquire karein.',p:p.name});
+    }
+  }catch(e){console.warn('autoNotifyProd:',e);}
+}
+
+// ── Admin page ──
+function initNotifAdmin(){
+  var sel=document.getElementById('nfProd');
+  if(sel){
+    var cur=sel.value;
+    sel.innerHTML='<option value="">— No product —</option>'+getProds().map(function(p){return '<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>';}).join('');
+    sel.value=cur;
+  }
+  var c=getNotifCfg();
+  document.getElementById('nfcNew').checked=!!c.newProd;
+  document.getElementById('nfcPrice').checked=!!c.priceDrop;
+  document.getElementById('nfcTrend').checked=!!c.trending;
+  nfTemplate(false);loadPushCfg();
+  if(_nfBound)return;
+  onFbReady(function(){
+    if(_nfBound||!DB)return;
+    _nfBound=true;
+    DB.ref('tjc/notifs').on('value',function(s){
+      _nfList=[];s.forEach(function(c){var v=c.val();if(v){v.key=c.key;_nfList.push(v);}});
+      _nfList.sort(function(a,b){return b.ts-a.ts;});renderNotifAdmin();
+    });
+    DB.ref('tjc/subs').on('value',function(s){
+      _nfSubs=[];s.forEach(function(c){var v=c.val();if(v&&v.phone)_nfSubs.push(v);});
+      _nfSubs.sort(function(a,b){return b.ts-a.ts;});renderNotifAdmin();
+    });
+  });
+}
+
+function nfTemplate(force){
+  var t=document.getElementById('nfType').value,pn=document.getElementById('nfProd').value;
+  var ti=document.getElementById('nfTitle'),ms=document.getElementById('nfMsg');
+  if(!force&&(ti.dataset.e==='1'||ms.dataset.e==='1'))return;
+  var T={
+    update:['New Arrival'+(pn?': '+pn:'!'),(pn?pn+' ka':'Naya')+' stock aa gaya hai! Catalogue me dekhein aur enquire karein.'],
+    price:['Price Drop'+(pn?': '+pn:'!'),(pn?pn+' ka':'Select articles ka')+' rate kam ho gaya hai — abhi enquire karein.'],
+    discount:['Special Offer!','Limited time wholesale discount — bulk order par extra chhoot. Details ke liye WhatsApp karein.'],
+    trending:['Trending Now'+(pn?': '+pn:''),(pn?pn:'Ye article')+' abhi sabse zyada demand me hai — stock limited, jaldi enquire karein.']
+  }[t];
+  ti.value=T[0];ms.value=T[1];
+}
+
+function sendNotif(){
+  var t=document.getElementById('nfType').value,pn=document.getElementById('nfProd').value;
+  var h=document.getElementById('nfTitle').value.trim(),m=document.getElementById('nfMsg').value.trim();
+  if(!h||!m){toast('Title aur message dono likho','err');return;}
+  if(!confirm('Ye notification SABHI customers ko jayega:\n\n'+h+'\n'+m+'\n\nBhejein?'))return;
+  var o={t:t,h:h,m:m};if(pn)o.p=pn;
+  pushNotif(o).then(function(){
+    toast('🔔 Notification bhej diya gaya!','ok');
+    logActivity('Sent notification "'+h+'"');
+    var ti=document.getElementById('nfTitle'),ms=document.getElementById('nfMsg');
+    ti.dataset.e='';ms.dataset.e='';nfTemplate(true);
+  }).catch(function(e){if(e)toast('❌ Send failed','err');});
+}
+
+function nfDel(key){
+  if(!confirm('Ye notification delete karein?'))return;
+  DB.ref('tjc/notifs/'+key).remove().then(function(){toast('Deleted','ok');});
+}
+function nfClearAll(){
+  if(!confirm('Saare notifications delete karein?'))return;
+  DB.ref('tjc/notifs').remove().then(function(){toast('Sab clear ho gaya','ok');});
+}
+
+// WhatsApp message for a subscriber (uses the text currently in the form, else latest sent)
+function nfWaText(){
+  var h=document.getElementById('nfTitle').value.trim(),m=document.getElementById('nfMsg').value.trim();
+  if(!h||!m){var l=_nfList[0];if(l){h=l.h;m=l.m;}}
+  return (NF_ICON[document.getElementById('nfType').value]||'🔔')+' *'+h+'*\n'+m+'\n\n👉 '+SITE_URL;
+}
+function nfWa(phone){window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(nfWaText()),'_blank');}
+function nfCopyNums(){
+  var txt=_nfSubs.map(function(s){return s.phone;}).join('\n');
+  if(!txt){toast('Abhi koi subscriber nahi','err');return;}
+  nfCopyText(txt,'📋 '+_nfSubs.length+' numbers copy ho gaye',null);
+}
+function nfDelSub(phone){
+  if(!confirm('Subscriber hataein?'))return;
+  DB.ref('tjc/subs/'+phone).remove();
+}
+
+function renderNotifAdmin(){
+  var fmt=function(ts){return new Date(ts).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});};
+  var hl=document.getElementById('nfHist'),sl=document.getElementById('nfSubList'),sc=document.getElementById('nfSubCount');
+  if(hl)hl.innerHTML=_nfList.length?_nfList.map(function(n){
+    return '<div class="nf-row"><div><b>'+(NF_ICON[n.t]||'🔔')+' '+esc(n.h)+'</b><div style="opacity:.65;margin-top:2px">'+esc(n.m)+'</div><div style="opacity:.4;font-size:10px;margin-top:3px">'+fmt(n.ts)+(n.p?' · '+esc(n.p):'')+'</div></div><button class="savebtn" style="padding:4px 9px;color:#f87171;border-color:rgba(248,113,113,.3)" onclick="nfDel(\''+n.key+'\')">🗑</button></div>';
+  }).join(''):'<div style="opacity:.5;font-size:12px;padding:8px 0">Abhi tak koi notification nahi bheja.</div>';
+  if(sc)sc.textContent=_nfSubs.length;
+  var pc=document.getElementById('pcCount');if(pc)pc.textContent=_nfSubs.filter(function(x){return x.token;}).length+' / '+_nfSubs.length;
+  if(sl)sl.innerHTML=_nfSubs.length?_nfSubs.map(function(s){
+    return '<div class="nf-row"><div><b>'+(s.token?'🟢 ':'⚪ ')+esc(s.name||'Customer')+'</b><div style="opacity:.65">+'+esc(s.phone)+'</div><div style="opacity:.4;font-size:10px">'+fmt(s.ts)+'</div></div><div style="display:flex;gap:6px"><button class="savebtn" style="padding:4px 9px" onclick="nfWa(\''+esc(s.phone)+'\')">📲</button><button class="savebtn" style="padding:4px 9px;color:#f87171;border-color:rgba(248,113,113,.3)" onclick="nfDelSub(\''+esc(s.phone)+'\')">🗑</button></div></div>';
+  }).join(''):'<div style="opacity:.5;font-size:12px;padding:8px 0">Abhi koi subscriber nahi. Customers website ki 🔔 se join kar sakte hain.</div>';
+}
+
+
+// ── Real push, registered from the TOP page (public site runs inside an srcdoc iframe,
+//    and service workers can't be registered from there) ──
+var PUSH_SW_CODE="// Service worker for background push (site band hone par bhi notification dikhata hai).\n// IMPORTANT: ye file website ke ROOT par honi chahiye:  https://your-site.vercel.app/firebase-messaging-sw.js\nimportScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');\nimportScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');\n\nfirebase.initializeApp({\n  apiKey: \"AIzaSyCbrej21968UxvwEJRp8T1JUfzgMOJAAOA\",\n  projectId: \"the-jeans-club-website\",\n  messagingSenderId: \"610707824562\",\n  appId: \"1:610707824562:web:24f08e30351371c5270eab\"\n});\n\n// Notification payload FCM khud dikha deta hai; tap karne par site khulti hai (webpush.fcm_options.link).\nfirebase.messaging();\n";
+var PUSH_WORKER_CODE="// Cloudflare Worker: admin panel -> FCM push to registered customers.\n// Secrets (Worker Settings -> Variables -> Secret):\n//   PUSH_SECRET          = koi bhi lamba random password (admin panel me bhi wahi daalna)\n//   FCM_SERVICE_ACCOUNT  = Firebase service-account JSON ka poora text\nconst CORS = {\n  'Access-Control-Allow-Origin': '*',\n  'Access-Control-Allow-Headers': 'Content-Type,X-Secret',\n  'Access-Control-Allow-Methods': 'POST,OPTIONS'\n};\nconst json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });\nconst b64u = (x) => btoa(typeof x === 'string' ? x : String.fromCharCode(...new Uint8Array(x))).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\n\nasync function accessToken(sa) {\n  const now = Math.floor(Date.now() / 1000);\n  const head = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));\n  const claim = b64u(JSON.stringify({\n    iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging',\n    aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600\n  }));\n  const pem = sa.private_key.replace(/-----[^-]+-----/g, '').replace(/\\s+/g, '');\n  const key = await crypto.subtle.importKey('pkcs8', Uint8Array.from(atob(pem), c => c.charCodeAt(0)),\n    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);\n  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(head + '.' + claim));\n  const r = await fetch('https://oauth2.googleapis.com/token', {\n    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n    body: 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=' + head + '.' + claim + '.' + b64u(sig)\n  });\n  const d = await r.json();\n  if (!d.access_token) throw new Error('OAuth failed');\n  return d.access_token;\n}\n\nexport default {\n  async fetch(req, env) {\n    if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });\n    if (req.method !== 'POST' || req.headers.get('X-Secret') !== env.PUSH_SECRET) return json({ error: 'forbidden' }, 403);\n    const { title, body, link, tokens } = await req.json();\n    if (!title || !Array.isArray(tokens)) return json({ error: 'bad request' }, 400);\n    const sa = JSON.parse(env.FCM_SERVICE_ACCOUNT);\n    const at = await accessToken(sa);\n    const url = 'https://fcm.googleapis.com/v1/projects/' + sa.project_id + '/messages:send';\n    let sent = 0, failed = 0; const invalid = [];\n    const list = tokens.slice(0, 1000);\n    for (let i = 0; i < list.length; i += 20) {\n      await Promise.all(list.slice(i, i + 20).map(async (token) => {\n        const r = await fetch(url, {\n          method: 'POST', headers: { Authorization: 'Bearer ' + at, 'Content-Type': 'application/json' },\n          body: JSON.stringify({ message: { token, notification: { title, body },\n            webpush: { fcm_options: { link: link || '/' }, notification: { icon: '/favicon.ico' } } } })\n        });\n        if (r.ok) sent++;\n        else { failed++; const t = await r.text(); if (r.status === 404 || t.includes('UNREGISTERED') || t.includes('INVALID_ARGUMENT')) invalid.push(token); }\n      }));\n    }\n    return json({ sent, failed, invalid });\n  }\n};\n";
+function nfDl(name,text){
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/javascript'}));
+  a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);
+}
+// Copy that also works on file:// / content:// pages (where navigator.clipboard is blocked)
+function nfCopyText(text,okMsg,boxId){
+  function legacy(){
+    try{
+      var t=document.createElement('textarea');t.value=text;t.style.cssText='position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(t);t.focus();t.select();t.setSelectionRange(0,t.value.length);
+      var ok=document.execCommand('copy');t.remove();return ok;
+    }catch(e){return false;}
+  }
+  function done(ok){
+    if(ok){toast(okMsg,'ok');return;}
+    var b=boxId&&document.getElementById(boxId);
+    if(b){b.style.display='block';b.value=text;b.focus();b.select();}
+    toast('Auto-copy nahi hua — neeche box me code hai, usme long-press karke Select all → Copy karo','err');
+  }
+  if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(text).then(function(){done(true);},function(){done(legacy());});
+  else done(legacy());
+}
+function nfCopyWorker(){nfCopyText(PUSH_WORKER_CODE,'Worker code copy ho gaya ✅ — Cloudflare me paste karo','pcCodeBox');}
+function tjhPush(phone){
+  return new Promise(function(resolve){
+    if(!('serviceWorker' in navigator)||!('Notification' in window)||!('PushManager' in window)||Notification.permission!=='granted')return resolve(false);
+    onFbReady(function(){
+      if(!DB)return resolve(false);
+      DB.ref('tjc/pushCfg/vapid').once('value').then(function(s){
+        var vapid=s.val();if(!vapid)return false;
+        return new Promise(function(r,j){
+          if(firebase.messaging)return r();
+          var x=document.createElement('script');x.src='https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js';
+          x.onload=r;x.onerror=j;document.head.appendChild(x);
+        }).then(function(){return navigator.serviceWorker.register('/firebase-messaging-sw.js');})
+        .then(function(reg){return firebase.messaging().getToken({vapidKey:vapid,serviceWorkerRegistration:reg});})
+        .then(function(tok){if(!tok)return false;return DB.ref('tjc/subs/'+phone+'/token').set(tok).then(function(){return true;});});
+      }).then(resolve).catch(function(){resolve(false);});
+    });
+  });
+}
+window.tjhPush=tjhPush;
+
+// ══ PUBLIC SITE: CSS + client script (injected into the generated website) ══
+var NOTIF_PUBLIC_CSS=''
++'#nfBell{position:fixed;left:16px;bottom:118px;z-index:9999;width:44px;height:44px;border-radius:50%;background:#000;color:#fff;border:1px solid #C9A227;font-size:19px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3)}'
++'#nfCnt{position:absolute;top:-4px;right:-4px;background:#CC2936;color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 4px}'
++'#nfPanel{display:none;position:fixed;inset:0;z-index:99998}#nfPanel.open{display:block}'
++'.nf-bg{position:absolute;inset:0;background:rgba(0,0,0,.45)}'
++'.nf-sheet{position:absolute;left:0;right:0;bottom:0;max-height:82vh;background:#fff;color:#111;border-radius:16px 16px 0 0;display:flex;flex-direction:column}'
++'@media(min-width:700px){.nf-sheet{left:16px;right:auto;bottom:16px;width:380px;border-radius:14px}}'
++'.nf-hd{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #eee;font-size:14px}'
++'.nf-hd button{background:none;border:0;font-size:18px;cursor:pointer;color:#111}'
++'#nfList{overflow-y:auto;padding:4px 0 calc(10px + env(safe-area-inset-bottom))}'
++'.nf-it{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid #f1f1f1}.nf-it.nw{background:#fffaf0}'
++'.nf-ic{font-size:22px}.nf-t{font-weight:700;font-size:13px}.nf-m{font-size:12px;color:#444;margin-top:2px;line-height:1.5}'
++'.nf-f{font-size:10.5px;color:#888;margin-top:4px}.nf-f a{color:#8B6914;font-weight:700}'
++'.nf-bar{margin:10px 16px 0;padding:10px 12px;background:#f7f3e6;border-radius:8px;font-size:12px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}'
++'.nf-bar button{background:#000;color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer}'
++'.nf-sub div{display:flex;gap:6px;width:100%;flex-wrap:wrap}.nf-sub input{flex:1 1 110px;min-width:0;padding:8px;border:1px solid #ccc;border-radius:6px;font-size:12px}'
++'.nf-empty{padding:28px 16px;text-align:center;color:#888;font-size:12px}'
++'#nfToast{position:fixed;left:12px;right:12px;top:64px;z-index:100000;background:#000;color:#fff;border-left:3px solid #C9A227;padding:11px 14px;border-radius:8px;font-size:12.5px;display:none;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.35)}'
++'@media(min-width:700px){#nfToast{left:auto;right:20px;width:340px}}';
+
+// NOTE: this function is serialised with .toString() and runs inside the PUBLIC website,
+// so it must stay self-contained (no references to admin-only variables).
+function _tjcNotifClient(){
+  try{
+    if(typeof firebase==='undefined'||!firebase.apps||!firebase.apps.length)return;
+    var db=firebase.database();
+    var SEEN='tjc_notif_seen',SUB='tjc_notif_sub';
+    var TY={update:'🆕',price:'💸',discount:'🎁',trending:'🔥'};
+    var list=[],ready=false,maxTs=0,open=false,tt;
+    function lsg(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+    function lss(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+    function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+    function ago(t){var d=(Date.now()-t)/1000;if(d<60)return 'abhi';if(d<3600)return Math.floor(d/60)+' min pehle';if(d<86400)return Math.floor(d/3600)+' ghante pehle';return Math.floor(d/86400)+' din pehle';}
+    var $=function(id){return document.getElementById(id);};
+
+    var bell=document.createElement('button');
+    bell.id='nfBell';bell.type='button';bell.setAttribute('aria-label','Notifications');
+    bell.innerHTML='🔔<span id="nfCnt"></span>';
+    var panel=document.createElement('div');panel.id='nfPanel';
+    panel.innerHTML='<div class="nf-bg" id="nfBg"></div><div class="nf-sheet"><div class="nf-hd"><b>🔔 Updates &amp; Offers</b><button type="button" id="nfX" aria-label="Close">✕</button></div><div id="nfTools"></div><div id="nfSay" style="display:none;margin:8px 16px 0;font-size:12px;line-height:1.5"></div><div id="nfList"></div></div>';
+    var toast=document.createElement('div');toast.id='nfToast';
+    document.body.appendChild(bell);document.body.appendChild(panel);document.body.appendChild(toast);
+
+    function showToast(msg,openOnTap){
+      toast.textContent=msg;toast.style.display='block';
+      toast.onclick=function(){toast.style.display='none';if(openOnTap)openPanel();};
+      clearTimeout(tt);tt=setTimeout(function(){toast.style.display='none';},5500);
+    }
+    function renderTools(){
+      var h='';
+      if('Notification' in window&&Notification.permission==='default')
+        h+='<div class="nf-bar"><span>Naye offers ka alert chahiye?</span><button type="button" id="nfAllow">Alerts ON</button></div>';
+      if(!lsg(SUB))
+        h+='<div class="nf-bar nf-sub"><span>📲 Offers seedha WhatsApp par paayein</span><div><input id="nfNm" maxlength="40" placeholder="Naam / Shop"><input id="nfPh" type="tel" inputmode="numeric" maxlength="14" placeholder="WhatsApp number"><button type="button" id="nfJoin">Join</button></div></div>';
+      $('nfTools').innerHTML=h;
+    }
+    function render(){
+      var seen=Number(lsg(SEEN)||0),unread=0,h='';
+      var arr=list.slice().sort(function(a,b){return b.ts-a.ts;});
+      arr.forEach(function(n){
+        var nw=n.ts>seen;if(nw)unread++;
+        h+='<div class="nf-it'+(nw?' nw':'')+'"><span class="nf-ic">'+(TY[n.t]||'🔔')+'</span><div><div class="nf-t">'+esc(n.h)+'</div><div class="nf-m">'+esc(n.m)+'</div><div class="nf-f">'+ago(n.ts)+(n.p?' · <a href="#" data-p="'+esc(n.p)+'">Product dekhein</a>':'')+'</div></div></div>';
+      });
+      $('nfList').innerHTML=h||'<div class="nf-empty">Abhi koi naya update nahi hai.</div>';
+      var c=$('nfCnt');
+      if(unread>0&&!open){c.textContent=unread>9?'9+':unread;c.style.display='flex';}else c.style.display='none';
+    }
+    function markSeen(){lss(SEEN,String(maxTs||Date.now()));}
+    function openPanel(){open=true;renderTools();render();panel.classList.add('open');markSeen();$('nfCnt').style.display='none';}
+    function closePanel(){open=false;panel.classList.remove('open');render();}
+    function openProduct(name){
+      closePanel();
+      try{
+        var idx=-1;
+        if(typeof ALLPRODS!=='undefined')for(var i=0;i<ALLPRODS.length;i++){if(ALLPRODS[i].name===name){idx=i;break;}}
+        if(idx>=0&&typeof openQv==='function'){openQv(idx);return;}
+        if(typeof smoothTo==='function')smoothTo('catalogue');
+      }catch(e){}
+    }
+    var MSG_SRC='https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js';
+    function loadMsg(){return new Promise(function(res,rej){
+      if(firebase.messaging)return res();
+      var s=document.createElement('script');s.src=MSG_SRC;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+    // Register this phone for real push (works even when the site is closed)
+    function enablePush(phone){
+      try{if(window.parent&&window.parent!==window&&typeof window.parent.tjhPush==='function')return window.parent.tjhPush(phone);}catch(e){}
+      if(!('serviceWorker' in navigator)||!('Notification' in window)||!('PushManager' in window)||Notification.permission!=='granted')return Promise.resolve(false);
+      return db.ref('tjc/pushCfg/vapid').once('value').then(function(s){
+        var vapid=s.val();if(!vapid)return false;
+        return loadMsg().then(function(){return navigator.serviceWorker.register('/firebase-messaging-sw.js');})
+        .then(function(reg){return firebase.messaging().getToken({vapidKey:vapid,serviceWorkerRegistration:reg});})
+        .then(function(tok){if(!tok)return false;return db.ref('tjc/subs/'+phone+'/token').set(tok).then(function(){return true;});});
+      }).catch(function(){return false;});
+    }
+    function say(t,c){var e=$('nfSay');if(!e)return;e.style.display=t?'block':'none';e.textContent=t||'';e.style.color=c||'#CC2936';}
+    function whyNoPush(){
+      var proto='';try{proto=(window.parent&&window.parent!==window?window.parent.location.protocol:location.protocol);}catch(e){try{proto=location.protocol;}catch(x){}}
+      if(proto==='file:'||proto==='about:')return 'Ye local file hai — push sirf https wali live site par chalta hai.';
+      if(!('PushManager' in window))return 'Is browser me push support nahi hai (iPhone par site ko Home Screen par add karein).';
+      if('Notification' in window&&Notification.permission==='denied')return 'Browser me notifications Block hain — site settings me Allow karein.';
+      return 'Push abhi activate nahi hua (store ka push setup baaki ho sakta hai).';
+    }
+    function withTimeout(p,ms){return Promise.race([p,new Promise(function(_,rej){setTimeout(function(){rej({message:'timeout'});},ms);})]);}
+    function join(){
+      var ph=$('nfPh'),d=(ph.value||'').replace(/\D/g,'');
+      if(d.length===12&&d.indexOf('91')===0)d=d.slice(2);
+      if(d.length!==10){ph.style.borderColor='#CC2936';say('10 digit ka mobile number daalein (jaise 9876543210)');return;}
+      ph.style.borderColor='';
+      var nm=($('nfNm').value||'').trim().slice(0,40);
+      say('Register ho raha hai…','#555');
+      // permission prompt must start inside the tap, but it must never block saving the number
+      var perm=Promise.resolve();
+      try{if('Notification' in window&&Notification.permission==='default')perm=Promise.resolve(Notification.requestPermission()).catch(function(){});}catch(e){}
+      withTimeout(db.ref('tjc/subs/91'+d).update({phone:'91'+d,name:nm,ts:Date.now(),src:'site'}),8000).then(function(){
+        lss(SUB,'1');lss('tjc_notif_ph','91'+d);renderTools();
+        say('✅ Number register ho gaya. Notification permission check ho rahi hai…','#1a7f37');
+        return perm.then(function(){return enablePush('91'+d);}).then(function(ok){
+          say(ok?'✅ Done! Ab har offer aapke phone par notification ke roop me aayega.':'✅ Number save ho gaya. '+whyNoPush(),ok?'#1a7f37':'#8a6d00');
+        });
+      }).catch(function(e){
+        var m=(e&&(e.code||e.message))||'';
+        say(/permission_denied/i.test(m)?'❌ Save nahi hua: Firebase Rules me tjc/subs ko write allow karna hoga.':'❌ Save nahi hua ('+m+'). Internet check karke dobara try karein.');
+      });
+    }
+    function announce(n){
+      if(open){markSeen();return;}
+      showToast((TY[n.t]||'🔔')+' '+n.h,true);
+      try{
+        if('Notification' in window&&Notification.permission==='granted'&&document.hidden)
+          new Notification(n.h,{body:n.m});
+      }catch(e){}
+    }
+
+    bell.addEventListener('click',openPanel);
+    panel.addEventListener('click',function(e){
+      var t=e.target;
+      if(t.id==='nfBg'||t.id==='nfX')closePanel();
+      else if(t.id==='nfAllow'){try{Notification.requestPermission().then(function(){renderTools();var ph=lsg('tjc_notif_ph');if(ph)enablePush(ph);});}catch(x){}}
+      else if(t.id==='nfJoin')join();
+      else if(t.getAttribute&&t.getAttribute('data-p')!==null){e.preventDefault();openProduct(t.getAttribute('data-p'));}
+    });
+
+    var _ph=lsg('tjc_notif_ph');if(_ph)setTimeout(function(){enablePush(_ph);},3000); // keep token fresh for returning customers
+    db.ref('tjc/notifs').limitToLast(30).on('value',function(s){
+      var arr=[],fresh=[],now=Date.now();
+      s.forEach(function(c){var v=c.val();if(v&&v.h&&v.ts&&now-v.ts<45*864e5)arr.push(v);});
+      if(ready)arr.forEach(function(n){if(n.ts>maxTs)fresh.push(n);});
+      list=arr;arr.forEach(function(n){if(n.ts>maxTs)maxTs=n.ts;});
+      ready=true;render();
+      fresh.forEach(announce);
+    });
+  }catch(e){console.warn('TJH notifications failed:',e);}
+}
 
 // ══ ESC HTML ══
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
