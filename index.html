@@ -4180,13 +4180,18 @@ function pushNotif(o){
   }).then(function(s){
     var ks=[];s.forEach(function(c){ks.push(c.key);});
     while(ks.length>50)DB.ref('tjc/notifs/'+ks.shift()).remove();
-  }).then(function(){sendPush(o);});
+  }).then(function(){return sendPush(o);});
 }
 
 // Real mobile push (FCM) via your Cloudflare Worker -> every customer who registered & allowed alerts
 function sendPush(o,quiet){
   var cfg=S.g('push_cfg')||{};
-  if(!DB||!cfg.worker||!cfg.secret)return Promise.resolve(null);
+  if(!DB||!cfg.worker||!cfg.secret){
+    var pe0=document.getElementById('pcErr');
+    if(pe0){pe0.style.color='#f87171';pe0.textContent='Push settings is device/browser me saved nahi hain — Mobile Push Setup me Worker URL aur Secret daalke Save Push Settings dabao.';}
+    if(!quiet)toast('⚠️ Push nahi gaya: Push settings is device me saved nahi hain','err');
+    return Promise.resolve(null);
+  }
   return DB.ref('tjc/subs').once('value').then(function(s){
     var toks=[],map={};
     s.forEach(function(c){var v=c.val();if(v&&v.token){toks.push(v.token);map[v.token]=c.key;}});
@@ -4196,7 +4201,11 @@ function sendPush(o,quiet){
     .then(function(r){return r.json();}).then(function(res){
       var pe=document.getElementById('pcErr');
       if(res.error==='forbidden'){if(pe)pe.textContent='Push Secret galat hai — Worker ke PUSH_SECRET se match karo.';toast('❌ Push Secret galat hai','err');return res;}
-      if(pe)pe.textContent=(res.errors&&res.errors.length)?('Push error: '+res.errors[0]):'';
+      if(pe){
+        var hh=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+        if(res.errors&&res.errors.length){pe.style.color='#f87171';pe.textContent='Push error: '+res.errors[0];}
+        else{pe.style.color='#4ade80';pe.textContent='Last push ('+hh+'): '+(res.sent||0)+' phone(s) par bheja gaya.';}
+      }
       (res.invalid||[]).forEach(function(t){if(map[t])DB.ref('tjc/subs/'+map[t]+'/token').remove();});
       toast('📲 Push bheja: '+(res.sent||0)+' phones'+(res.failed?' · '+res.failed+' fail':''),res.sent?'ok':'err');
       return res;
@@ -4289,7 +4298,7 @@ function sendNotif(){
   if(!confirm('Ye notification SABHI customers ko jayega:\n\n'+h+'\n'+m+'\n\nBhejein?'))return;
   var o={t:t,h:h,m:m};if(pn){o.p=pn;var pr=getProds().filter(function(x){return x.name===pn;})[0];var iu=nfImgOf(pr);if(iu)o.i=iu;}
   pushNotif(o).then(function(){
-    toast('🔔 Notification bhej diya gaya!','ok');
+    toast('🔔 Notification save ho gaya (website bell me dikhega). Phone push ka result neeche aayega…','ok');
     logActivity('Sent notification "'+h+'"');
     var ti=document.getElementById('nfTitle'),ms=document.getElementById('nfMsg');
     ti.dataset.e='';ms.dataset.e='';nfTemplate(true);
@@ -4364,6 +4373,16 @@ function nfCopyText(text,okMsg,boxId){
   else done(legacy());
 }
 function nfCopyWorker(){nfCopyText(PUSH_WORKER_CODE,'Worker code copy ho gaya ✅ — Cloudflare me paste karo','pcCodeBox');}
+// FCM shows nothing by itself while the site/app is open on screen -> display it ourselves
+function tjhFg(){
+  if(window._tjhFgOn||!firebase.messaging)return;window._tjhFgOn=true;
+  try{firebase.messaging().onMessage(function(p){
+    var n=(p&&p.notification)||{};
+    navigator.serviceWorker.ready.then(function(r){
+      r.showNotification(n.title||'The Jeans House',{body:n.body||'',icon:n.icon||'/icon-192.png',badge:n.badge||'/badge-96.png',image:n.image||undefined});
+    });
+  });}catch(e){}
+}
 function tjhPush(phone){
   return new Promise(function(resolve){
     if(!('serviceWorker' in navigator)||!('Notification' in window)||!('PushManager' in window)||Notification.permission!=='granted')return resolve(false);
@@ -4376,7 +4395,7 @@ function tjhPush(phone){
           var x=document.createElement('script');x.src='https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js';
           x.onload=r;x.onerror=j;document.head.appendChild(x);
         }).then(function(){return navigator.serviceWorker.register('/firebase-messaging-sw.js');})
-        .then(function(reg){return firebase.messaging().getToken({vapidKey:vapid,serviceWorkerRegistration:reg});})
+        .then(function(reg){tjhFg();return firebase.messaging().getToken({vapidKey:vapid,serviceWorkerRegistration:reg});})
         .then(function(tok){if(!tok)return false;return DB.ref('tjc/subs/'+phone+'/token').set(tok).then(function(){return true;});});
       }).then(resolve).catch(function(){resolve(false);});
     });
