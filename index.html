@@ -719,6 +719,37 @@ Delivery me kitna time lagta hai? :: Order confirm hone ke baad 48 hours me disp
   </div>
 </div>
 
+<!-- PRODUCT NOTIFICATION MODAL -->
+<div class="mbk" id="prodNotifModal">
+  <div class="mbox">
+    <div class="mhead">
+      <h3>🔔 Product Notification</h3>
+      <button class="mcls" onclick="closeMod('prodNotifModal')">✕</button>
+    </div>
+    <div class="mbody">
+      <input type="hidden" id="pnId">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+        <img id="pnImg" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:6px;display:none;border:1px solid rgba(201,162,39,.25)">
+        <div><div id="pnName" style="font-weight:700;font-size:13px"></div><div id="pnImgNote" class="nf-hint" style="margin:3px 0 0"></div></div>
+      </div>
+      <div class="fg"><label>Type</label>
+        <select id="pnType" onchange="pnTemplate(true)">
+          <option value="update">🆕 New Arrival</option>
+          <option value="price">💸 Price Drop</option>
+          <option value="trending">🔥 Trending Article</option>
+          <option value="discount">🎁 Special Offer</option>
+        </select></div>
+      <div class="fg"><label>Title</label><input id="pnTitle" maxlength="60" placeholder="Notification title"></div>
+      <div class="fg"><label>Message</label><textarea id="pnMsg" maxlength="180" placeholder="Short message for customers"></textarea></div>
+      <div class="nf-hint">Ye notification SABHI customers ko jayega — product ki photo ke saath (website 🔔 bell + phone push), aur "Product dekhein" button aayega.</div>
+    </div>
+    <div class="mfoot">
+      <button class="btn-cancel" onclick="closeMod('prodNotifModal')">Cancel</button>
+      <button class="btn-save" id="pnSendBtn" onclick="sendProdNotif()">🚀 Send to All Customers</button>
+    </div>
+  </div>
+</div>
+
 <!-- CATEGORY MODAL -->
 <div class="mbk" id="catModal">
   <div class="mbox">
@@ -2469,6 +2500,7 @@ function renderProds(){
       +'<div class="pcard-row"><span class="pcard-price">₹'+p.price+'</span></div>'
       +(function(){var szArr=p.sizes?String(p.sizes).split(/[,\/]/).map(function(s){return s.trim();}).filter(Boolean):[];if(!szArr.length)return'';if(p.sellType==='piece'){return'<div class="pcard-moq">MOQ '+(p.moq||1)+' Pc(s) · Sizes: '+esc(szArr.join(', '))+'</div>';}return'<div class="pcard-moq">MOQ '+(p.moq||1)+' Set(s) · '+szArr.length+' Pcs/Set ('+esc(szArr.join(', '))+')</div>';})()
       +'<div class="pcard-edit-bar"><button class="btn-sm-edit" onclick="openProdModal('+p.id+')" style="flex:1">✏️ Edit</button><button class="btn-sm-del" onclick="delProd('+p.id+')" style="flex:1">🗑 Delete</button></div>'
+      +'<button class="btn-sm-edit" onclick="openProdNotif('+p.id+')" style="width:100%;margin-top:6px;padding:7px 11px">🔔 Notification Bhejo</button>'
       +'<div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.03);border:1px solid rgba(201,162,39,.08);border-radius:4px;padding:6px 10px">'
       +'<span style="font-size:10px;color:rgba(245,237,214,.45);font-weight:600">🌐 Show on Website</span>'
       +'<div onclick="toggleFeatured('+p.id+')" style="position:relative;width:36px;height:20px;cursor:pointer;background:'+(p.featured!==false?'var(--gold)':'rgba(255,255,255,.15)')+';border-radius:20px;transition:background .25s;flex-shrink:0">'
@@ -4328,6 +4360,48 @@ function sendNotif(){
     var ti=document.getElementById('nfTitle'),ms=document.getElementById('nfMsg');
     ti.dataset.e='';ms.dataset.e='';nfTemplate(true);
   }).catch(function(e){if(e)toast('❌ Send failed','err');});
+}
+
+// ── Per-product notification (Products page -> 🔔 button) ──
+function pnTemplate(force){
+  var p=getProds().filter(function(x){return String(x.id)===document.getElementById('pnId').value;})[0];
+  if(!p)return;
+  var t=document.getElementById('pnType').value,n=p.name;
+  var T={
+    update:['New Arrival: '+n,'Naya design aa gaya hai! Catalogue me dekhein aur wholesale rate ke liye enquire karein.'],
+    price:['Price Drop: '+n,'Rate kam ho gaya hai! Latest wholesale rate ke liye abhi enquire karein.'],
+    trending:['Trending: '+n,'Ye article abhi sabse zyada demand me hai \u2014 stock limited, jaldi enquire karein.'],
+    discount:['Special Offer: '+n,'Limited time wholesale offer \u2014 bulk order par extra chhoot. Details ke liye WhatsApp karein.']
+  }[t];
+  document.getElementById('pnTitle').value=T[0].slice(0,60);
+  document.getElementById('pnMsg').value=T[1];
+}
+function openProdNotif(id){
+  var p=getProds().filter(function(x){return x.id===id;})[0];
+  if(!p)return;
+  document.getElementById('pnId').value=p.id;
+  document.getElementById('pnName').textContent=p.name;
+  document.getElementById('pnType').value='update';
+  var u=nfImgOf(p),im=document.getElementById('pnImg'),nt=document.getElementById('pnImgNote');
+  if(u){im.src=u;im.style.display='block';nt.textContent='\u2705 Product ki photo notification ke saath jayegi';nt.style.color='#4ade80';}
+  else{im.style.display='none';nt.textContent='\u26a0\ufe0f Is product ki photo online (https) link nahi hai, isliye notification bina photo ke jayega';nt.style.color='#fbbf24';}
+  pnTemplate(true);
+  openMod('prodNotifModal');
+}
+function sendProdNotif(){
+  var p=getProds().filter(function(x){return String(x.id)===document.getElementById('pnId').value;})[0];
+  if(!p)return;
+  var t=document.getElementById('pnType').value;
+  var h=document.getElementById('pnTitle').value.trim(),m=document.getElementById('pnMsg').value.trim();
+  if(!h||!m){toast('Title aur message dono likho','err');return;}
+  var warn=p.stock==='outofstock'?'\n\u26a0\ufe0f Ye product abhi Out of Stock hai!\n':'';
+  if(!confirm('Ye notification SABHI customers ko jayega:\n\n'+h+'\n'+m+'\n'+warn+'\nBhejein?'))return;
+  var btn=document.getElementById('pnSendBtn');btn.disabled=true;
+  pushNotifP(p,{t:t,h:h,m:m,p:p.name}).then(function(){
+    toast('\ud83d\udd14 Notification bhej diya: '+p.name,'ok');
+    logActivity('Sent notification \"'+h+'\"');
+    closeMod('prodNotifModal');
+  }).catch(function(e){if(e)toast('\u274c Send failed','err');}).then(function(){btn.disabled=false;});
 }
 
 function nfDel(key){
